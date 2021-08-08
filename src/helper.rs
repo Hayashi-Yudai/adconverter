@@ -53,20 +53,20 @@ extern "C" {
 	pub fn TUSB0216AD_Trigger(id: i32) -> i32;
 }
 
-pub fn parse_error(e: i32) {
+pub fn parse_error(e: i32, func_name: &str) {
 	match e {
-		0 => println!("No error"),
-		1 => println!("Invalid ID"),
-		2 => println!("Invalid Driver"),
-		3 => println!("Device already opened"),
-		4 => println!("Too many devices"),
-		5 => println!("Failed to open device"),
-		6 => println!("Device not found"),
-		8 => println!("Parameters are invalid"),
-		9 => println!("USB connection error"),
-		11 => println!("Sequential reading"),
-		99 => println!("Other error"),
-		_ => println!("Other error"),
+		0 => {}
+		1 => println!("{}: Invalid ID", func_name),
+		2 => println!("{}: Invalid Driver", func_name),
+		3 => println!("{}: Device already opened", func_name),
+		4 => println!("{}: Too many devices", func_name),
+		5 => println!("{}: Failed to open device", func_name),
+		6 => println!("{}: Device not found", func_name),
+		8 => println!("{}: Parameters are invalid", func_name),
+		9 => println!("{}: USB connection error", func_name),
+		11 => println!("{}: Sequential reading", func_name),
+		99 => println!("{}: Other error", func_name),
+		_ => println!("{}: Other error", func_name),
 	}
 }
 
@@ -85,21 +85,26 @@ impl Data {
 pub fn continuous_read(id: i32, seconds: u64, flag: Arc<Mutex<i8>>) {
 	println!("Timer start!");
 	let sleeping_time = time::Duration::from_secs(seconds);
+	let mut error: i32;
 
 	unsafe {
 		// TODO: ステージ位置に関しては、+/-10Vが最適かわからない
 		// CH1, 2ともに+/-10Vの入力を受け付ける
 		// 入力が+/-10VなのはSR830の仕様
-		TUSB0216AD_Input_Set(id, 0, 0);
-		TUSB0216AD_Start(id, &(2 as u8), 0, 0, 0);
-		TUSB0216AD_Trigger(id);
+		error = TUSB0216AD_Input_Set(id, 0, 0);
+		parse_error(error, "TUSB0216AD_Input_Set");
+		error = TUSB0216AD_Start(id, &(2 as u8), 0, 0, 0);
+		parse_error(error, "TUSB0216AD_Start");
+		error = TUSB0216AD_Trigger(id);
+		parse_error(error, "TUSB0216AD_Trigger");
 	}
 
 	*flag.lock().unwrap() = 0; // 計測開始のフラグを立てる
 	thread::sleep(sleeping_time);
 
 	unsafe {
-		TUSB0216AD_Stop(id);
+		error = TUSB0216AD_Stop(id);
+		parse_error(error, "TUSB0216AD_Stop");
 	}
 
 	*flag.lock().unwrap() = 1; // 計測終了のフラグを立てる
@@ -131,8 +136,6 @@ pub fn get_data(id: i32, flag: Arc<Mutex<i8>>, position: &mut Vec<f32>, intensit
 			break;
 		}
 		unsafe {
-			// *const i32 を想定して書いているが *mut i32 かもしれない
-			// 実機で確認
 			TUSB0216AD_Ad_Data(id, 1, data1.as_mut_ptr(), l_ptr);
 			TUSB0216AD_Ad_Data(id, 2, data2.as_mut_ptr(), l_ptr);
 		}

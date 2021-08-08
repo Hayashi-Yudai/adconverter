@@ -9,7 +9,7 @@ pub extern "C" fn open(id: i32) -> i32 {
     unsafe {
         error = helper::TUSB0216AD_Device_Open(id);
     }
-    helper::parse_error(error);
+    helper::parse_error(error, "TUSB0216AD_Device_Open");
 
     error
 }
@@ -28,7 +28,7 @@ pub extern "C" fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32 {
     unsafe {
         error = helper::TUSB0216AD_AdClk_Set(id, clock_time, sel);
     }
-    helper::parse_error(error);
+    helper::parse_error(error, "TUSB0216AD_AdClk_Set");
 
     error
 }
