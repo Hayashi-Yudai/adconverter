@@ -46,12 +46,17 @@ pub extern "C" fn run(id: i32, seconds: u64) {
     });
 
     let flg2 = Arc::clone(&flag);
-    let mut x = vec![0.0 as f32; DATA_SIZE];
-    let mut y = vec![0.0 as f32; DATA_SIZE];
+    let x = Arc::new(Mutex::new(vec![0.0 as f32; DATA_SIZE]));
+    let y = Arc::new(Mutex::new(vec![0.0 as f32; DATA_SIZE]));
 
+    let x_cln = Arc::clone(&x);
+    let y_cln = Arc::clone(&y);
     let job_runner = thread::spawn(move || {
-        helper::get_data(id, flg2, &mut x, &mut y);
+        helper::get_data(id, flg2, x_cln, y_cln);
     });
+
+    // TODO: reqwest package を使って Django側にデータを投げる
+    // TODO: データを投げる間隔は 500 msくらいにする
 
     time_keeper.join().unwrap();
     job_runner.join().unwrap();
