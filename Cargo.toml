@@ -4,6 +4,9 @@ edition = "2018"
 name = "adconverter"
 version = "0.1.0"
 
+[dependencies]
+synthrs = { git = "https://github.com/gyng/synthrs" }
+
 [lib]
 crate-type = ["dylib"]
 name = "adconverter"

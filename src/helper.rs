@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
+use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
 
 /// TUSB16ADのドライバに定義されいるMicrosoft Visual Cインターフェース群
 #[link(name = "TUSB16AD", kind = "dylib")]
@@ -161,6 +162,20 @@ fn convert_to_valtage(ch1_range: u8, ch2_range: u8, ch1_data: f32, ch2_data: f32
     return (ch1_result, ch2_result);
 }
 
+/// low pass filter
+/// cutoff: 40 Hz
+/// sampling rate: 100 kHz
+/// band: 0.01
+fn lowpass(sample: Vec<f32>) -> Vec<f32> {
+    let filter = lowpass_filter(cutoff_from_frequency(4000.0, 1000_000), 0.01);
+    let sample: Vec<f64> = sample.into_iter().map(|x| x as f64).collect();
+
+    convolve(&filter, sample.as_slice())
+        .into_iter()
+        .map(|x| x as f32)
+        .collect()
+}
+
 /// 装置の連続データ取り込みの制御。指定の時間だけデータ取り込みを行う
 /// このメソッドではデータの取り込み開始、終了を制御するだけで装置のバッファに
 /// たまったデータの取り出しは行わない
@@ -176,7 +191,6 @@ pub fn continuous_read(id: i32, seconds: u64, flag: Arc<Mutex<i8>>) {
     let mut error: i32;
 
     unsafe {
-        // TODO: ステージ位置に関しては、+/-10Vが最適かわからない
         // CH1, 2ともに+/-10Vの入力を受け付ける
         // 入力が+/-10VなのはSR830の仕様
         error = TUSB0216AD_Input_Set(id, 0, 0);
@@ -252,13 +266,16 @@ pub fn get_data(
                 data1[i as usize] as f32,
                 data2[i as usize] as f32,
             );
-            tmp1[i as usize] = result.0;
-            tmp2[i as usize] = result.1;
+            tmp1[i as usize] = result.0; // position
+            tmp2[i as usize] = result.1; // signal
         }
+
+        let position_denoised = lowpass(tmp1);
+
         // TODO: ここから先は非同期処理に切り出す
         // ステージのポジション(tmp1)ごとにデータをまとめる
         // +/-10Vとして位置測定をしていると仮定している
-        let mut dataset = tmp1
+        let mut dataset = position_denoised
             .iter()
             .zip(tmp2.iter())
             .map(|(x, y)| ((x * 10000.0).round() / 10000.0, y))
