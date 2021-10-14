@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
 
@@ -86,8 +86,12 @@ struct Data {
 }
 
 impl Data {
-    fn new(x: f32, y: f32) -> Self {
-        Data { x: x, y: y, len: 1 }
+    fn new(x: f32, y: f32, len: u32) -> Self {
+        Data {
+            x: x,
+            y: y,
+            len: len,
+        }
     }
 }
 
@@ -176,6 +180,51 @@ fn lowpass(sample: Vec<f32>) -> Vec<f32> {
         .collect()
 }
 
+// ステージのポジション(tmp1)ごとにデータをまとめる
+// +/-10Vとして位置測定をしていると仮定している
+fn update_data(
+    x: Vec<f32>,
+    y: Vec<f32>,
+    position: &mut MutexGuard<Vec<f32>>,
+    intensity: &mut MutexGuard<Vec<f32>>,
+    counter: &mut MutexGuard<Vec<u32>>,
+) {
+    let mut dataset = x
+        .iter()
+        .zip(y.iter())
+        .map(|(x, y)| ((x * 10000.0).round() / 10000.0, y))
+        .collect::<Vec<_>>();
+    dataset.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+
+    // aggregation
+    let mut data_bank: Vec<Data> = Vec::new();
+    for d in dataset.iter() {
+        match position.iter().position(|data| *data == d.0) {
+            Some(index) => {
+                intensity[index] = intensity[index] * counter[index] as f32 + d.1;
+                intensity[index] /= (counter[index] + 1) as f32;
+
+                counter[index] += 1;
+            }
+            None => {
+                position.push(d.0);
+                intensity.push(*d.1);
+                counter.push(1);
+            }
+        }
+    }
+
+    for idx in 0..position.len() {
+        data_bank.push(Data::new(position[idx], intensity[idx], counter[idx]));
+    }
+    data_bank.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
+    for idx in 0..position.len() {
+        position[idx] = data_bank[idx].x;
+        intensity[idx] = data_bank[idx].y;
+        counter[idx] = data_bank[idx].len;
+    }
+}
+
 /// 装置の連続データ取り込みの制御。指定の時間だけデータ取り込みを行う
 /// このメソッドではデータの取り込み開始、終了を制御するだけで装置のバッファに
 /// たまったデータの取り出しは行わない
@@ -227,6 +276,7 @@ pub fn get_data(
     flag: Arc<Mutex<i8>>,
     position: Arc<Mutex<Vec<f32>>>,
     intensity: Arc<Mutex<Vec<f32>>>,
+    counter: Arc<Mutex<Vec<u32>>>,
 ) {
     let ranges: (u8, u8) = get_ranges(id);
     // const MAX_LENGTH: usize = 262142;
@@ -272,43 +322,17 @@ pub fn get_data(
 
         let position_denoised = lowpass(tmp1);
 
-        // TODO: ここから先は非同期処理に切り出す
-        // ステージのポジション(tmp1)ごとにデータをまとめる
-        // +/-10Vとして位置測定をしていると仮定している
-        let mut dataset = position_denoised
-            .iter()
-            .zip(tmp2.iter())
-            .map(|(x, y)| ((x * 10000.0).round() / 10000.0, y))
-            .collect::<Vec<_>>();
-        dataset.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
-        // aggregation
-        let mut data_bank: Vec<Data> = Vec::new();
-
-        for d in dataset.iter() {
-            let converted_data = Data::new(d.0, *d.1);
-            match data_bank.iter().position(|data| data.x == converted_data.x) {
-                Some(index) => {
-                    data_bank[index].y =
-                        data_bank[index].y * (data_bank[index].len as f32) + converted_data.y;
-                    data_bank[index].y /= (data_bank[index].len + 1) as f32;
-
-                    data_bank[index].len = data_bank[index].len + 1;
-                }
-                None => {
-                    data_bank.push(converted_data);
-                }
-            }
-        }
-
-        data_bank.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-
         // position, intensity に値を入れる
         let mut position = position.lock().unwrap();
         let mut intensity = intensity.lock().unwrap();
-        for (idx, d) in data_bank.iter().enumerate() {
-            position[idx] = d.x;
-            intensity[idx] = d.y;
-        }
+        let mut counter = counter.lock().unwrap();
+        update_data(
+            position_denoised,
+            tmp2,
+            &mut position,
+            &mut intensity,
+            &mut counter,
+        );
 
         // データの要求長を元に戻す
         length = MAX_LENGTH as u32;
