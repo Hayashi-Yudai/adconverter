@@ -1,4 +1,6 @@
 # adconverter
+Turtle工業製16bits A/Dコンバータを動かすためのプログラム。
+[THz-TDS 計測システム](https://github.com/Hayashi-Yudai/scan_system)に組み込んで使うことを前提として作成している。
 
 ## Links
 
