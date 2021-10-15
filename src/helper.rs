@@ -189,6 +189,7 @@ fn update_data(
     intensity: &mut MutexGuard<Vec<f32>>,
     counter: &mut MutexGuard<Vec<u32>>,
 ) {
+    // 10 V = 3.75 μm -> 10/10000 V = 375 nm
     let mut dataset = x
         .iter()
         .zip(y.iter())

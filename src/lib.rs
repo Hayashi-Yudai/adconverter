@@ -38,7 +38,9 @@ pub extern "C" fn run(id: i32, seconds: u64) {
     // sequence が走っているかを示すフラグ
     // -1: not-started, 0: running, 1: finished
     let flag = Arc::new(Mutex::new(0));
-    const DATA_SIZE: usize = 50000;
+
+    // +/- 3.75μm駆動させたときに精度375nmで取るために必要な領域
+    const DATA_SIZE: usize = 20000;
 
     let flg1 = Arc::clone(&flag);
     let time_keeper = thread::spawn(move || {
@@ -46,6 +48,7 @@ pub extern "C" fn run(id: i32, seconds: u64) {
     });
 
     let flg2 = Arc::clone(&flag);
+    // TODO: ゼロ埋めはよくない
     let x = Arc::new(Mutex::new(vec![0.0 as f32; DATA_SIZE]));
     let y = Arc::new(Mutex::new(vec![0.0 as f32; DATA_SIZE]));
     let counter = Arc::new(Mutex::new(vec![0; DATA_SIZE]));
