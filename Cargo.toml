@@ -12,6 +12,10 @@ debug = []
 [dependencies]
 synthrs = { git = "https://github.com/gyng/synthrs" }
 
+[dev-dependencies]
+rand = "*"
+nearly_eq = "*"
+
 [lib]
 crate-type = ["dylib"]
 name = "adconverter"

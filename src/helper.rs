@@ -289,11 +289,11 @@ fn convert_to_voltage(ch1_range: u8, ch2_range: u8, ch1_data: f32, ch2_data: f32
 }
 
 /// low pass filter
-/// cutoff: 40 Hz
+/// cutoff: 30 Hz
 /// sampling rate: 100 kHz
 /// band: 0.01
 fn lowpass(sample: Vec<f32>) -> Vec<f32> {
-    let filter = lowpass_filter(cutoff_from_frequency(4000.0, 1000_000), 0.01);
+    let filter = lowpass_filter(cutoff_from_frequency(3000.0, 1000_000), 0.1);
     let sample: Vec<f64> = sample.into_iter().map(|x| x as f64).collect();
 
     convolve(&filter, sample.as_slice())
@@ -461,4 +461,128 @@ pub fn get_data(
         length = MAX_LENGTH as u32;
     }
     println!("Data acquisition stopped");
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use nearly_eq::*;
+    use rand::Rng;
+    use std::f64::consts::PI;
+    use std::fs::File;
+    use std::io::Write;
+    use std::sync::Mutex;
+
+    #[test]
+    fn test_get_range() {
+        let range = get_ranges(2);
+
+        assert_eq!(range.0, 0);
+        assert_eq!(range.1, 0);
+    }
+
+    /// 0: +/-10V, 1: +/-5V, 2: +/-2.5V, 3: +/-1.25V, 4: 10V, 5: 5V, 6: 2.5V
+    #[test]
+    fn test_calc_width() {
+        let width = calc_range_width(0); // +/-10 V
+        assert_eq!(width, 20.0);
+
+        let width = calc_range_width(1); // +/-5 V
+        assert_eq!(width, 10.0);
+
+        let width = calc_range_width(2); // +/-2.5 V
+        assert_eq!(width, 5.0);
+
+        let width = calc_range_width(3); // +/-1.25 V
+        assert_eq!(width, 2.5);
+
+        let width = calc_range_width(4); // 10 V
+        assert_eq!(width, 10.0);
+
+        let width = calc_range_width(5); // 5 V
+        assert_eq!(width, 5.0);
+
+        let width = calc_range_width(6); // 2.5 V
+        assert_eq!(width, 2.5);
+    }
+
+    #[test]
+    fn test_converting_voltage() {
+        let ch1_range = 0;
+        let ch2_range = 0;
+        let ch1_data = 1000.0;
+        let ch2_data = 500.0;
+
+        let result = convert_to_voltage(ch1_range, ch2_range, ch1_data, ch2_data);
+
+        assert_eq!(result.0, ch1_data * 20.0 / 2f32.powf(16.0) - 10.0);
+        assert_eq!(result.1, ch2_data * 20.0 / 2f32.powf(16.0) - 10.0);
+    }
+
+    #[test]
+    fn test_lowpass() {
+        const DATA_NUM: usize = 10000; // 0.1 sec
+        let mut x = vec![0.0];
+        let mut y = vec![0.0; DATA_NUM];
+        let mut rng = rand::thread_rng();
+
+        for i in 1..DATA_NUM {
+            x.push(i as f32);
+        }
+
+        // 1 data point = 10 micro-sec
+        // 1 cycle = 0.05 sec = 5000 data points
+        // y = sin(2e-4 * x)
+        for i in 0..DATA_NUM {
+            y[i] = (x[i] * 2e-4 * 2.0 * PI as f32).sin();
+        }
+
+        let mut y_noise = y.clone();
+        for i in 0..DATA_NUM {
+            let noise: f32 = rng.gen();
+            y_noise[i] = y[i] + 2.0 * 5e-3 * (noise - 0.5);
+        }
+
+        let denoised = lowpass(y_noise);
+        println!("{}", denoised.len());
+
+        for i in 5..(DATA_NUM - 5) {
+            assert_nearly_eq!(y[i], denoised[i], 0.003);
+        }
+
+        let mut file = File::create("C:/Users/yudai/Desktop/test.csv").unwrap();
+        for i in 0..DATA_NUM {
+            write!(file, "{},{}\n", y[i], denoised[i]).unwrap();
+        }
+        file.flush().unwrap();
+    }
+
+    #[test]
+    fn test_update_data() {
+        let x = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y = vec![0.0, 1.0, 4.0, 9.0, 16.0];
+        let position = Mutex::new(vec![0.0, 2.0, 4.0]);
+        let intensity = Mutex::new(vec![0.01, 4.5, 15.8]);
+        let counter = Mutex::new(vec![1, 2, 1]);
+
+        update_data(
+            x,
+            y,
+            &mut position.lock().unwrap(),
+            &mut intensity.lock().unwrap(),
+            &mut counter.lock().unwrap(),
+        );
+
+        let position = position.lock().unwrap();
+        let intensity = intensity.lock().unwrap();
+        let counter = counter.lock().unwrap();
+        let xx = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+        let yy = vec![0.005, 1.0, 13.0 / 3.0, 9.0, 15.9];
+        let cc = vec![2, 1, 3, 1, 2];
+        for i in 0..5 {
+            assert_eq!(position[i], xx[i]);
+            assert_eq!(intensity[i], yy[i]);
+            assert_eq!(counter[i], cc[i]);
+        }
+    }
 }
