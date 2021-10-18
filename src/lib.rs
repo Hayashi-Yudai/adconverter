@@ -48,10 +48,9 @@ pub extern "C" fn run(id: i32, seconds: u64) {
     });
 
     let flg2 = Arc::clone(&flag);
-    // TODO: ゼロ埋めはよくない
-    let x = Arc::new(Mutex::new(vec![0.0 as f32; DATA_SIZE]));
-    let y = Arc::new(Mutex::new(vec![0.0 as f32; DATA_SIZE]));
-    let counter = Arc::new(Mutex::new(vec![0; DATA_SIZE]));
+    let x = Arc::new(Mutex::new(Vec::<f32>::with_capacity(DATA_SIZE)));
+    let y = Arc::new(Mutex::new(Vec::<f32>::with_capacity(DATA_SIZE)));
+    let counter = Arc::new(Mutex::new(Vec::<u32>::with_capacity(DATA_SIZE)));
 
     let x_cln = Arc::clone(&x);
     let y_cln = Arc::clone(&y);
@@ -65,28 +64,4 @@ pub extern "C" fn run(id: i32, seconds: u64) {
 
     time_keeper.join().unwrap();
     job_runner.join().unwrap();
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    // test open() returns device not found error
-    #[test]
-    fn test_open_device() {
-        assert_eq!(open(1), 0);
-    }
-
-    #[test]
-    fn test_set_clock() {
-        let mut clock_time = 1000;
-        let sel = 0;
-
-        // device not found error
-        assert_eq!(set_clock(1, clock_time, sel), 6);
-
-        clock_time = 0;
-        // error with smaller number take precedence over that with larger number
-        assert_eq!(set_clock(1, clock_time, sel), 6);
-    }
 }
