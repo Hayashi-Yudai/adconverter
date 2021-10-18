@@ -97,20 +97,8 @@ pub unsafe fn TUSB0216AD_AdClk_Set(id: i32, clock_time: i32, sel: u8) -> i32 {
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
 pub unsafe fn TUSB0216AD_Start(id: i32, ch: &u8, _PreLen: i32, TrigType: u8, TrgCh: u8) -> i32 {
-    if id != 1 {
+    if id != 1 || *ch > 2 || TrigType > 3 || TrgCh > 1 {
         return 5;
-    }
-
-    if *ch > 2 {
-        return 4;
-    }
-
-    if TrigType > 3 {
-        return 4;
-    }
-
-    if TrgCh > 1 {
-        return 4;
     }
 
     0
@@ -129,14 +117,8 @@ pub unsafe fn TUSB0216AD_Stop(id: i32) -> i32 {
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
 pub unsafe fn TUSB0216AD_Input_Set(id: i32, type1: u8, type2: u8) -> i32 {
-    if id != 1 {
+    if id != 1 || type1 > 6 || type2 > 6 {
         return 5;
-    }
-    if type1 > 6 {
-        return 8;
-    }
-    if type2 > 6 {
-        return 8;
     }
     0
 }
