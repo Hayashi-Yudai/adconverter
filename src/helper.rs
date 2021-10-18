@@ -6,6 +6,7 @@ use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
 #[link(name = "TUSB16AD", kind = "dylib")]
 //#[link(name = "ad_mock.dll", kind = "dylib")] // Mock
 #[allow(dead_code)]
+#[cfg(feature = "release")]
 extern "C" {
     pub fn TUSB0216AD_Device_Open(id: i32) -> i32;
     pub fn TUSB0216AD_Device_Close(id: i32);
@@ -55,6 +56,127 @@ extern "C" {
     pub fn TUSB0216AD_Input_Check(id: i32, type1: *mut u8, type2: *mut u8) -> i32;
     /// ソフトウェアトリガを掛ける
     pub fn TUSB0216AD_Trigger(id: i32) -> i32;
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Device_Open(id: i32) -> i32 {
+    match id {
+        1 => 0,
+        _ => 5,
+    }
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Device_Close(id: i32) -> i32 {
+    match id {
+        1 => 0,
+        _ => 5,
+    }
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_AdClk_Set(id: i32, clock_time: i32, sel: u8) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+
+    if clock_time < 500 {
+        return 8;
+    }
+
+    if sel != 1 && sel != 2 {
+        return 8;
+    }
+
+    0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Start(id: i32, ch: &u8, _PreLen: i32, TrigType: u8, TrgCh: u8) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+
+    if *ch > 2 {
+        return 4;
+    }
+
+    if TrigType > 3 {
+        return 4;
+    }
+
+    if TrgCh > 1 {
+        return 4;
+    }
+
+    0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Stop(id: i32) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+
+    0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Input_Set(id: i32, type1: u8, type2: u8) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+    if type1 > 6 {
+        return 8;
+    }
+    if type2 > 6 {
+        return 8;
+    }
+    0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Input_Check(id: i32, type1: *mut u8, type2: *mut u8) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+    *type1 = 0;
+    *type2 = 0;
+
+    0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Trigger(id: i32) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+    0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Ad_Data(id: i32, ch: u8, data: *mut i32, datalen: *mut u32) -> i32 {
+    if id != 1 {
+        return 5;
+    }
+
+    if ch != 0 && ch != 1 {
+        return 8;
+    }
+    *datalen = 1000;
+    for i in 0..1000 {
+        *data.offset(i) = i as i32;
+    }
+    0
 }
 
 /// エラーコードからエラーの詳細を表示する
@@ -145,7 +267,7 @@ fn calc_range_width(range: u8) -> f32 {
 /// # Returns
 ///
 /// CH1, CH2の出力電圧値
-fn convert_to_valtage(ch1_range: u8, ch2_range: u8, ch1_data: f32, ch2_data: f32) -> (f32, f32) {
+fn convert_to_voltage(ch1_range: u8, ch2_range: u8, ch1_data: f32, ch2_data: f32) -> (f32, f32) {
     let ch1_width: f32 = calc_range_width(ch1_range);
     let ch2_width: f32 = calc_range_width(ch2_range);
 
@@ -311,7 +433,7 @@ pub fn get_data(
         let mut tmp1 = vec![0.0; length as usize];
         let mut tmp2 = vec![0.0; length as usize];
         for i in 0..length {
-            let result = convert_to_valtage(
+            let result = convert_to_voltage(
                 ranges.0,
                 ranges.1,
                 data1[i as usize] as f32,
