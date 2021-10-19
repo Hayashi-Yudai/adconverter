@@ -156,7 +156,7 @@ pub unsafe fn TUSB0216AD_Ad_Data(id: i32, ch: u8, data: *mut i32, datalen: *mut 
     }
     *datalen = 1000;
     for i in 0..1000 {
-        *data.offset(i) = i as i32;
+        *data.offset(i) = (2f32.powf(15.0) * ((2e-2 * i as f32).sin() + 1.0)) as i32;
     }
     0
 }
@@ -294,12 +294,12 @@ fn update_data(
     counter: &mut MutexGuard<Vec<u32>>,
 ) {
     // 10 V = 3.75 μm -> 10/10000 V = 375 nm
-    let mut dataset = x
+    let dataset = x
         .iter()
         .zip(y.iter())
         .map(|(x, y)| ((x * 10000.0).round() / 10000.0, y))
         .collect::<Vec<_>>();
-    dataset.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+    // dataset.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
 
     // aggregation
     let mut data_bank: Vec<Data> = Vec::new();
@@ -414,7 +414,7 @@ pub fn get_data(
         // 設定しているレンジに応じて電圧に変換する
         let mut tmp1 = vec![0.0; length as usize];
         let mut tmp2 = vec![0.0; length as usize];
-        for i in 0..length {
+        for i in 0..length as usize {
             let result = convert_to_voltage(
                 ranges.0,
                 ranges.1,
@@ -453,7 +453,10 @@ mod test {
     use std::f64::consts::PI;
     use std::fs::File;
     use std::io::Write;
+    use std::sync::Arc;
     use std::sync::Mutex;
+    use std::thread;
+    use std::time::Instant;
 
     #[test]
     fn test_get_range() {
@@ -532,7 +535,7 @@ mod test {
             assert_nearly_eq!(y[i], denoised[i], 0.003);
         }
 
-        let mut file = File::create("C:/Users/yudai/Desktop/test.csv").unwrap();
+        let mut file = File::create("C:/Users/yudai/Desktop/test_lowpass.csv").unwrap();
         for i in 0..DATA_NUM {
             write!(file, "{},{}\n", y[i], denoised[i]).unwrap();
         }
@@ -566,5 +569,84 @@ mod test {
             assert_eq!(intensity[i], yy[i]);
             assert_eq!(counter[i], cc[i]);
         }
+    }
+
+    #[test]
+    fn test_continuous_read() {
+        let seconds = 1;
+        let start = Instant::now();
+        continuous_read(1, seconds, Arc::new(Mutex::new(0)));
+        let end = start.elapsed();
+
+        assert_nearly_eq!(end.as_millis() as f32, (seconds * 1000) as f32, 15.0);
+    }
+
+    #[test]
+    fn test_get_data() {
+        let position: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
+        let intensity: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
+        let counter: Arc<Mutex<Vec<u32>>> = Arc::new(Mutex::new(Vec::new()));
+        let flag = Arc::new(Mutex::new(-1));
+
+        let flg1 = Arc::clone(&flag);
+        let time_keeper = thread::spawn(move || {
+            continuous_read(1, 1, flg1);
+        });
+
+        let flg2 = Arc::clone(&flag);
+        let posi_cln = Arc::clone(&position);
+        let intensity_cln = Arc::clone(&intensity);
+        let counter_cln = Arc::clone(&counter);
+        let job_runner = thread::spawn(move || {
+            get_data(1, flg2, posi_cln, intensity_cln, counter_cln);
+        });
+
+        time_keeper.join().unwrap();
+        job_runner.join().unwrap();
+
+        assert_eq!(*Arc::clone(&flag).lock().unwrap(), 1);
+
+        let output_posi = Arc::clone(&position);
+        let output_int = Arc::clone(&intensity);
+        let output_counter = Arc::clone(&counter);
+
+        let mut file = File::create("C:/Users/yudai/Desktop/test.csv").unwrap();
+        for i in 0..998 {
+            write!(
+                file,
+                "{},{},{}\n",
+                output_posi.lock().unwrap()[i],
+                output_int.lock().unwrap()[i],
+                output_counter.lock().unwrap()[i]
+            )
+            .unwrap();
+        }
+        file.flush().unwrap();
+    }
+
+    #[test]
+    fn test_ad_data_mock() {
+        const MAX_LENGTH: usize = 100000;
+        let mut length = MAX_LENGTH as u32;
+        let mut data1 = [0; MAX_LENGTH];
+        let mut data2 = [0; MAX_LENGTH];
+        let l_ptr = &mut length as *mut u32;
+        let err;
+        let err2;
+        unsafe {
+            err = TUSB0216AD_Ad_Data(1, 0, data1.as_mut_ptr(), l_ptr);
+            err2 = TUSB0216AD_Ad_Data(1, 1, data2.as_mut_ptr(), l_ptr);
+        }
+
+        assert_eq!(err, 0);
+        assert_eq!(err2, 0);
+        assert_eq!(length, 1000);
+
+        let mut file = File::create("C:/Users/yudai/Desktop/test_raw.csv").unwrap();
+        for i in 0..998 {
+            let result = convert_to_voltage(0, 0, data1[i] as f32, data2[i] as f32);
+            write!(file, "{},{}\n", result.0, result.1).unwrap();
+        }
+        file.flush().unwrap();
     }
 }
