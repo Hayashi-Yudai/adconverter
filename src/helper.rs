@@ -1,3 +1,4 @@
+use std::f64::consts::PI;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
@@ -154,9 +155,10 @@ pub unsafe fn TUSB0216AD_Ad_Data(id: i32, ch: u8, data: *mut i32, datalen: *mut 
     if ch != 0 && ch != 1 {
         return 8;
     }
-    *datalen = 1000;
-    for i in 0..1000 {
-        *data.offset(i) = (2f32.powf(15.0) * ((2e-2 * i as f32).sin() + 1.0)) as i32;
+    *datalen = 10000;
+    for i in 0..10000 {
+        *data.offset(i) =
+            (2f32.powf(15.0) * ((2e-4 * 2.0 * PI as f32 * i as f32).sin() + 1.0)) as i32;
     }
     0
 }
@@ -578,7 +580,7 @@ mod test {
         continuous_read(1, seconds, Arc::new(Mutex::new(0)));
         let end = start.elapsed();
 
-        assert_nearly_eq!(end.as_millis() as f32, (seconds * 1000) as f32, 15.0);
+        assert_nearly_eq!(end.as_millis() as f32, (seconds * 1000) as f32, 50.0);
     }
 
     #[test]
@@ -611,7 +613,7 @@ mod test {
         let output_counter = Arc::clone(&counter);
 
         let mut file = File::create("C:/Users/yudai/Desktop/test.csv").unwrap();
-        for i in 0..998 {
+        for i in 0..2588 {
             write!(
                 file,
                 "{},{},{}\n",
@@ -640,10 +642,10 @@ mod test {
 
         assert_eq!(err, 0);
         assert_eq!(err2, 0);
-        assert_eq!(length, 1000);
+        assert_eq!(length, 10000);
 
         let mut file = File::create("C:/Users/yudai/Desktop/test_raw.csv").unwrap();
-        for i in 0..998 {
+        for i in 0..9980 {
             let result = convert_to_voltage(0, 0, data1[i] as f32, data2[i] as f32);
             write!(file, "{},{}\n", result.0, result.1).unwrap();
         }
