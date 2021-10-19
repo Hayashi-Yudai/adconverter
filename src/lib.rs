@@ -1,5 +1,6 @@
-mod helper;
+mod helpers;
 
+use helpers::{helper, operation};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -7,7 +8,7 @@ use std::thread;
 pub extern "C" fn open(id: i32) -> i32 {
     let error: i32;
     unsafe {
-        error = helper::TUSB0216AD_Device_Open(id);
+        error = operation::TUSB0216AD_Device_Open(id);
     }
     helper::parse_error(error, "TUSB0216AD_Device_Open");
 
@@ -17,7 +18,7 @@ pub extern "C" fn open(id: i32) -> i32 {
 #[no_mangle]
 pub extern "C" fn close(id: i32) {
     unsafe {
-        helper::TUSB0216AD_Device_Close(id);
+        operation::TUSB0216AD_Device_Close(id);
     }
 }
 
@@ -26,7 +27,7 @@ pub extern "C" fn close(id: i32) {
 pub extern "C" fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32 {
     let error: i32;
     unsafe {
-        error = helper::TUSB0216AD_AdClk_Set(id, clock_time, sel);
+        error = operation::TUSB0216AD_AdClk_Set(id, clock_time, sel);
     }
     helper::parse_error(error, "TUSB0216AD_AdClk_Set");
 
