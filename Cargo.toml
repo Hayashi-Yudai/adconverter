@@ -11,6 +11,9 @@ debug = []
 
 [dependencies]
 synthrs = { git = "https://github.com/gyng/synthrs" }
+reqwest = { version = "0.11.6", features = ["json"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+dotenv = "*"
 
 [dev-dependencies]
 rand = "*"

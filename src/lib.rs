@@ -1,6 +1,7 @@
 mod helpers;
 
-use helpers::{helper, operation};
+use dotenv::dotenv;
+use helpers::{helper, operation, post};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -39,6 +40,7 @@ pub extern "C" fn run(id: i32, seconds: u64) {
     // sequence が走っているかを示すフラグ
     // -1: not-started, 0: running, 1: finished
     let flag = Arc::new(Mutex::new(0));
+    dotenv().ok();
 
     // +/- 3.75μm駆動させたときに精度375nmで取るために必要な領域
     const DATA_SIZE: usize = 20000;
@@ -62,7 +64,14 @@ pub extern "C" fn run(id: i32, seconds: u64) {
 
     // TODO: reqwest package を使って Django側にデータを投げる
     // TODO: データを投げる間隔は 500 msくらいにする
+    let x_cln2 = Arc::clone(&x);
+    let y_cln2 = Arc::clone(&y);
+    let flg3 = Arc::clone(&flag);
+    let post_data = thread::spawn(move || {
+        let _ = post::post_data(flg3, x_cln2, y_cln2);
+    });
 
     time_keeper.join().unwrap();
     job_runner.join().unwrap();
+    post_data.join().unwrap();
 }
