@@ -273,6 +273,7 @@ pub fn get_data(
         let mut position = position.lock().unwrap();
         let mut intensity = intensity.lock().unwrap();
         let mut counter = counter.lock().unwrap();
+        println!("Data num: {}", position.len());
         update_data(
             position_denoised,
             tmp2,
@@ -290,6 +291,8 @@ pub fn get_data(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::helpers::post;
+    use dotenv::dotenv;
     use nearly_eq::*;
     use rand::Rng;
     use std::f64::consts::PI;
@@ -425,6 +428,8 @@ mod test {
 
     #[test]
     fn test_get_data() {
+        dotenv().ok();
+
         let position: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
         let intensity: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
         let counter: Arc<Mutex<Vec<u32>>> = Arc::new(Mutex::new(Vec::new()));
@@ -443,8 +448,16 @@ mod test {
             get_data(1, flg2, posi_cln, intensity_cln, counter_cln);
         });
 
+        let x_cln2 = Arc::clone(&position);
+        let y_cln2 = Arc::clone(&intensity);
+        let flg3 = Arc::clone(&flag);
+        let post_data = thread::spawn(move || {
+            let _ = post::post_data(flg3, x_cln2, y_cln2);
+        });
+
         time_keeper.join().unwrap();
         job_runner.join().unwrap();
+        post_data.join().unwrap();
 
         assert_eq!(*Arc::clone(&flag).lock().unwrap(), 1);
 

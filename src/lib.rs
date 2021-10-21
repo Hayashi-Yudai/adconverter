@@ -62,8 +62,6 @@ pub extern "C" fn run(id: i32, seconds: u64) {
         helper::get_data(id, flg2, x_cln, y_cln, counter_cln);
     });
 
-    // TODO: reqwest package を使って Django側にデータを投げる
-    // TODO: データを投げる間隔は 500 msくらいにする
     let x_cln2 = Arc::clone(&x);
     let y_cln2 = Arc::clone(&y);
     let flg3 = Arc::clone(&flag);
