@@ -1,9 +1,15 @@
 use reqwest;
-use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 use tokio;
+
+#[derive(Serialize)]
+struct JsonData {
+    x: Vec<f32>,
+    y: Vec<f32>,
+    finished: bool,
+}
 
 pub fn post_data(
     flag: Arc<Mutex<i8>>,
@@ -27,13 +33,7 @@ pub fn post_data(
     let client = reqwest::Client::new();
     let url = env::var("DATA_POST_URL").expect("DATA_POST_URL is not set");
     loop {
-        if *flag.lock().unwrap() == 1 {
-            break;
-        }
-
         thread::sleep(time::Duration::from_millis(100));
-
-        let mut map = HashMap::new();
         let x = position.lock().unwrap();
         let y = intensity.lock().unwrap();
 
@@ -45,12 +45,33 @@ pub fn post_data(
             yy.push(y[i]);
         }
 
+        if *flag.lock().unwrap() == 1 {
+            // TODO: post data
+            rt.block_on(async {
+                let data = JsonData {
+                    x: xx,
+                    y: yy,
+                    finished: true,
+                };
+                let _response = client
+                    .post(&url)
+                    .json(&data)
+                    .send()
+                    .await
+                    .expect("Failed to post json");
+            });
+            break;
+        }
+
         rt.block_on(async {
-            map.insert("x", &xx);
-            map.insert("y", &yy);
+            let data = JsonData {
+                x: xx,
+                y: yy,
+                finished: false,
+            };
             let _response = client
                 .post(&url)
-                .json(&map)
+                .json(&data)
                 .send()
                 .await
                 .expect("Failed to post json");

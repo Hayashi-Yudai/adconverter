@@ -1,5 +1,9 @@
 mod helpers;
 
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
 use dotenv::dotenv;
 use helpers::{helper, operation, post};
 use std::sync::{Arc, Mutex};
