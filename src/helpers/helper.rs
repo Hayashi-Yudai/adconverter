@@ -380,11 +380,13 @@ mod test {
             assert_nearly_eq!(y[i], denoised[i], 0.003);
         }
 
+        /*
         let mut file = File::create("C:/Users/yudai/Desktop/test_lowpass.csv").unwrap();
         for i in 0..DATA_NUM {
             write!(file, "{},{}\n", y[i], denoised[i]).unwrap();
         }
         file.flush().unwrap();
+        */
     }
 
     #[test]
@@ -466,6 +468,7 @@ mod test {
         let output_int = Arc::clone(&intensity);
         let output_counter = Arc::clone(&counter);
 
+        /*
         let mut file = File::create("C:/Users/yudai/Desktop/test.csv").unwrap();
         for i in 0..2588 {
             write!(
@@ -478,6 +481,7 @@ mod test {
             .unwrap();
         }
         file.flush().unwrap();
+        */
     }
 
     #[test]
@@ -498,11 +502,13 @@ mod test {
         assert_eq!(err2, 0);
         assert_eq!(length, 10000);
 
+        /*
         let mut file = File::create("C:/Users/yudai/Desktop/test_raw.csv").unwrap();
         for i in 0..9980 {
             let result = convert_to_voltage(0, 0, data1[i] as f32, data2[i] as f32);
             write!(file, "{},{}\n", result.0, result.1).unwrap();
         }
         file.flush().unwrap();
+        */
     }
 }
