@@ -427,6 +427,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_get_data() {
         dotenv().ok();
 

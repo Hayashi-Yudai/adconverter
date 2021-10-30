@@ -27,7 +27,6 @@ pub extern "C" fn close(id: i32) {
     }
 }
 
-// fn TUSB0216AD_AdClk_Set(id: i32, ClkTime: i32, sel: u8) -> i32;
 #[no_mangle]
 pub extern "C" fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32 {
     let error: i32;
@@ -37,6 +36,22 @@ pub extern "C" fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32 {
     helper::parse_error(error, "TUSB0216AD_AdClk_Set");
 
     error
+}
+
+/// Change input range of each channel.
+/// Specify the input ranges with a number.
+/// 0: +/-10 V, 1: +/-5V, 2: +/-2.5 V, 3: +/-1.25V
+/// 4: 10 V, 5: 5 V, 6: 2.5 V
+///
+/// * `id` - Device number
+/// * `type1` - input range of CH1
+/// * `type2` - input range of CH2
+#[no_mangle]
+pub extern "C" fn input_set(id: i32, type1: u8, type2: u8) {
+    unsafe {
+        let err = operation::TUSB0216AD_Input_Set(id, type1, type2);
+        helper::parse_error(err, "TUSB0216AD_Input_Set");
+    }
 }
 
 #[no_mangle]

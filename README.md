@@ -26,7 +26,8 @@ cargo build --features release --release
 fn open(id: i32) -> i32;
 fn close(id: i32) -> i32;
 fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32;
+fn input_set(id: i32, type1: u8, type2: u8);
 fn run(id: i32, seconds: u64);
 ```
 
-上の３つに関してはTurtle工業の製品のマニュアルを参照。`run`メソッドでは指定した時間(s)A/Dコンバータでデータを取り込んでデータを外部にpostする。
+上の4つに関してはTurtle工業の製品のマニュアルを参照。`run`メソッドでは指定した時間(s)A/Dコンバータでデータを取り込んでデータを外部にpostする。
