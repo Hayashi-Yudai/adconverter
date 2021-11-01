@@ -88,7 +88,7 @@ pub extern "C" fn run(id: i32, seconds: u64) {
         let _ = post::post_data(flg3, x_cln2, y_cln2);
     });
 
-    time_keeper.join().unwrap();
-    job_runner.join().unwrap();
-    post_data.join().unwrap();
+    time_keeper.join().expect("Paniced at time_keeper");
+    job_runner.join().expect("Paniced at job_runner");
+    post_data.join().expect("Paniced at post_data thread");
 }

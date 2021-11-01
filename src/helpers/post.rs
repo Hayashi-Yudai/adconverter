@@ -34,8 +34,8 @@ pub fn post_data(
     let url = env::var("DATA_POST_URL").expect("DATA_POST_URL is not set");
     loop {
         thread::sleep(time::Duration::from_millis(100));
-        let x = position.lock().unwrap();
-        let y = intensity.lock().unwrap();
+        let x = position.lock().expect("Failed to lock position");
+        let y = intensity.lock().expect("Failed to lock intensity");
 
         let mut xx: Vec<f32> = Vec::new();
         let mut yy: Vec<f32> = Vec::new();
@@ -46,7 +46,6 @@ pub fn post_data(
         }
 
         if *flag.lock().unwrap() == 1 {
-            // TODO: post data
             rt.block_on(async {
                 let data = JsonData {
                     x: xx,

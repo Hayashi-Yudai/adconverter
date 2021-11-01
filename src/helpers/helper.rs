@@ -273,7 +273,6 @@ pub fn get_data(
         let mut position = position.lock().unwrap();
         let mut intensity = intensity.lock().unwrap();
         let mut counter = counter.lock().unwrap();
-        println!("Data num: {}", position.len());
         update_data(
             position_denoised,
             tmp2,
