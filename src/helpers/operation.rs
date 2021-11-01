@@ -86,7 +86,7 @@ pub unsafe fn TUSB0216AD_AdClk_Set(id: i32, clock_time: i32, sel: u8) -> i32 {
         return 8;
     }
 
-    if sel != 1 && sel != 2 {
+    if sel != 0 && sel != 1 {
         return 8;
     }
 
