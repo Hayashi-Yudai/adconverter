@@ -62,7 +62,6 @@ pub extern "C" fn input_set(id: c_short, type1: u8, type2: u8) -> c_short {
 pub extern "C" fn input_check(id: c_short) -> i32 {
     let mut type1: u8 = 0;
     let mut type2: u8 = 0;
-    // let l_ptr = &mut length as *mut u32;
     let type1_ptr = &mut type1 as *mut u8;
     let type2_ptr = &mut type2 as *mut u8;
     unsafe {
@@ -93,28 +92,6 @@ pub extern "C" fn stop(id: c_short) -> c_short {
     }
 
     err
-}
-
-fn status() -> (u8, c_uint, c_uint) {
-    let mut status = 1 as u8;
-    let mut overflow = [0, 0];
-    let mut datalen = [0, 0];
-    unsafe {
-        operation::TUSB0216AD_Ad_Status(
-            0,
-            &mut status as *mut u8,
-            overflow.as_mut_ptr(),
-            datalen.as_mut_ptr(),
-        );
-    }
-
-    println!("================");
-    println!("status: {}", status);
-    println!("Overflow: {:?}", overflow);
-    println!("DataLen: {:?}", datalen);
-    println!("================");
-
-    (status, datalen[0], datalen[1])
 }
 
 #[no_mangle]
@@ -195,10 +172,10 @@ pub extern "C" fn test_run() {
 
         for _ in 0..100 {
             let mut data1 = [0 as c_int; MAX_LENGTH];
-            let (status, ch1_len, _) = status();
-            length = ch1_len;
+            let device_status = operation::status(true);
+            length = device_status.ch1_datalen;
 
-            if status == 3 {
+            if device_status.status == 3 {
                 err = operation::TUSB0216AD_Ad_Data(
                     0,
                     0,

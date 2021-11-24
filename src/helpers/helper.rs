@@ -1,7 +1,8 @@
 use crate::helpers::operation::*;
+use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
-use std::os::raw::c_short;
+use std::os::raw::{c_short, c_uint};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
@@ -199,6 +200,8 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
         // 入力が+/-10VなのはSR830の仕様
         error = TUSB0216AD_Input_Set(id, 0, 0);
         parse_error(error, "TUSB0216AD_Input_Set");
+        error = TUSB0216AD_AdClk_Set(id, 500, 0);
+        parse_error(error, "TUSB0216AD_AdClk_Set");
         error = TUSB0216AD_Start(id, 2, 0, 0, 0);
         parse_error(error, "TUSB0216AD_Start");
         error = TUSB0216AD_Trigger(id);
@@ -236,7 +239,7 @@ pub fn get_data(
     let ranges: (u8, u8) = get_ranges(id);
     // const MAX_LENGTH: usize = 262142;
     const MAX_LENGTH: usize = 100000;
-    let mut length = MAX_LENGTH as u32;
+    let mut length: c_uint;
 
     println!("Data acquisition started");
     loop {
@@ -248,15 +251,22 @@ pub fn get_data(
 
     let mut data1 = [0; MAX_LENGTH];
     let mut data2 = [0; MAX_LENGTH];
-    let l_ptr = &mut length as *mut u32;
 
     loop {
         if *flag.lock().unwrap() == 1 {
             break;
         }
-        unsafe {
-            TUSB0216AD_Ad_Data(id, 0, data1.as_mut_ptr(), l_ptr);
-            TUSB0216AD_Ad_Data(id, 1, data2.as_mut_ptr(), l_ptr);
+        let device_status = status(false);
+
+        if device_status.status == 3 {
+            length = min(device_status.ch1_datalen, device_status.ch2_datalen);
+            let l_ptr = &mut length as *mut u32;
+            unsafe {
+                TUSB0216AD_Ad_Data(id, 0, data1.as_mut_ptr(), l_ptr);
+                TUSB0216AD_Ad_Data(id, 1, data2.as_mut_ptr(), l_ptr);
+            }
+        } else {
+            continue;
         }
 
         // データの変換
@@ -288,9 +298,6 @@ pub fn get_data(
             &mut intensity,
             &mut counter,
         );
-
-        // データの要求長を元に戻す
-        length = MAX_LENGTH as u32;
     }
     println!("Data acquisition stopped");
 }
@@ -313,8 +320,6 @@ mod test {
     use nearly_eq::*;
     use rand::Rng;
     use std::f64::consts::PI;
-    use std::fs::File;
-    use std::io::Write;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::thread;

@@ -1,4 +1,4 @@
-// use std::f64::consts::PI;
+use std::f64::consts::PI;
 use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 
 /// TUSB16ADのドライバに定義されいるMicrosoft Visual Cインターフェース群
@@ -73,10 +73,53 @@ extern "C" {
     pub fn TUSB0216AD_Trigger(id: c_short) -> c_short;
 }
 
+pub struct DeviceStatus {
+    pub status: c_uchar,
+    pub ch1_datalen: c_uint,
+    pub ch2_datalen: c_uint,
+}
+
+impl DeviceStatus {
+    fn new(status: c_uchar, ch1_datalen: c_uint, ch2_datalen: c_uint) -> Self {
+        DeviceStatus {
+            status: status,
+            ch1_datalen: ch1_datalen,
+            ch2_datalen: ch2_datalen,
+        }
+    }
+}
+
+pub fn status(verbose: bool) -> DeviceStatus {
+    let mut status = 1 as u8;
+    let mut overflow = [0, 0];
+    let mut datalen = [0, 0];
+    unsafe {
+        TUSB0216AD_Ad_Status(
+            0,
+            &mut status as *mut u8,
+            overflow.as_mut_ptr(),
+            datalen.as_mut_ptr(),
+        );
+    }
+
+    match verbose {
+        true => {
+            println!("============");
+            println!("Status: {}", status);
+            println!("Overflow: {:?}", overflow);
+            println!("DataLen: {:?}", datalen);
+            println!("============");
+        }
+        false => {}
+    }
+
+    DeviceStatus::new(status, datalen[0], datalen[1])
+}
+
 // Debug用 mock
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Device_Open(id: i32) -> i32 {
+pub unsafe fn TUSB0216AD_Device_Open(id: c_short) -> c_short {
     match id {
         1 => 0,
         _ => 5,
@@ -85,7 +128,7 @@ pub unsafe fn TUSB0216AD_Device_Open(id: i32) -> i32 {
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Device_Close(id: i32) -> i32 {
+pub unsafe fn TUSB0216AD_Device_Close(id: c_short) -> c_short {
     match id {
         1 => 0,
         _ => 5,
@@ -94,7 +137,7 @@ pub unsafe fn TUSB0216AD_Device_Close(id: i32) -> i32 {
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_AdClk_Set(id: i32, clock_time: i32, sel: u8) -> i32 {
+pub unsafe fn TUSB0216AD_AdClk_Set(id: c_short, clock_time: c_int, sel: c_uchar) -> c_short {
     if id != 1 {
         return 5;
     }
@@ -112,8 +155,14 @@ pub unsafe fn TUSB0216AD_AdClk_Set(id: i32, clock_time: i32, sel: u8) -> i32 {
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Start(id: i32, ch: &u8, _PreLen: i32, TrigType: u8, TrgCh: u8) -> i32 {
-    if id != 1 || *ch > 2 || TrigType > 3 || TrgCh > 1 {
+pub unsafe fn TUSB0216AD_Start(
+    id: c_short,
+    ch: c_uchar,
+    _PreLen: c_int,
+    TrigType: c_uchar,
+    TrgCh: c_uchar,
+) -> c_short {
+    if id != 1 || ch > 2 || TrigType > 3 || TrgCh > 1 {
         return 5;
     }
 
@@ -122,7 +171,7 @@ pub unsafe fn TUSB0216AD_Start(id: i32, ch: &u8, _PreLen: i32, TrigType: u8, Trg
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Stop(id: i32) -> i32 {
+pub unsafe fn TUSB0216AD_Stop(id: c_short) -> c_short {
     if id != 1 {
         return 5;
     }
@@ -132,7 +181,7 @@ pub unsafe fn TUSB0216AD_Stop(id: i32) -> i32 {
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Input_Set(id: i32, type1: u8, type2: u8) -> i32 {
+pub unsafe fn TUSB0216AD_Input_Set(id: c_short, type1: c_uchar, type2: c_uchar) -> c_short {
     if id != 1 || type1 > 6 || type2 > 6 {
         return 5;
     }
@@ -141,7 +190,11 @@ pub unsafe fn TUSB0216AD_Input_Set(id: i32, type1: u8, type2: u8) -> i32 {
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Input_Check(id: i32, type1: *mut u8, type2: *mut u8) -> i32 {
+pub unsafe fn TUSB0216AD_Input_Check(
+    id: c_short,
+    type1: *mut c_uchar,
+    type2: *mut c_uchar,
+) -> c_short {
     if id != 1 {
         return 5;
     }
@@ -153,7 +206,7 @@ pub unsafe fn TUSB0216AD_Input_Check(id: i32, type1: *mut u8, type2: *mut u8) ->
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Trigger(id: i32) -> i32 {
+pub unsafe fn TUSB0216AD_Trigger(id: c_short) -> c_short {
     if id != 1 {
         return 5;
     }
@@ -162,7 +215,12 @@ pub unsafe fn TUSB0216AD_Trigger(id: i32) -> i32 {
 
 #[cfg(feature = "debug")]
 #[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Ad_Data(id: i32, ch: u8, data: *mut i32, datalen: *mut u32) -> i32 {
+pub unsafe fn TUSB0216AD_Ad_Data(
+    id: c_short,
+    ch: c_uchar,
+    data: *mut c_int,
+    datalen: *mut c_uint,
+) -> c_short {
     if id != 1 {
         return 5;
     }
@@ -176,4 +234,29 @@ pub unsafe fn TUSB0216AD_Ad_Data(id: i32, ch: u8, data: *mut i32, datalen: *mut 
             (2f32.powf(15.0) * ((2e-4 * 2.0 * PI as f32 * i as f32).sin() + 1.0)) as i32;
     }
     0
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Ad_Single(id: c_short, _Data: *mut c_int) -> c_short {
+    if id != 1 {
+        return 5;
+    }
+
+    return 0;
+}
+
+#[cfg(feature = "debug")]
+#[allow(non_snake_case)]
+pub unsafe fn TUSB0216AD_Ad_Status(
+    id: c_short,
+    _status: *mut c_uchar,
+    _overflow: *mut c_uchar,
+    _datalen: *mut c_uint,
+) -> c_short {
+    if id != 1 {
+        return 5;
+    }
+
+    return 0;
 }

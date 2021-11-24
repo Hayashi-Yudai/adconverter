@@ -5,7 +5,7 @@ name = "adconverter"
 version = "0.1.0"
 
 [features]
-default = ["release"]
+default = []
 release = []
 debug = []
 
