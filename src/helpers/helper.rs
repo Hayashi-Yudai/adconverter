@@ -1,4 +1,7 @@
 use crate::helpers::operation::*;
+use std::fs::File;
+use std::io::Write;
+use std::os::raw::c_short;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
@@ -292,6 +295,16 @@ pub fn get_data(
     println!("Data acquisition stopped");
 }
 
+pub fn write_to_csv(file_name: &str, x: &Vec<f32>, y: &Vec<f32>) {
+    let mut file = File::create(file_name).unwrap();
+
+    for i in 0..x.len() {
+        write!(file, "{},{}\n", x[i], y[i]).unwrap();
+    }
+
+    file.flush().unwrap();
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -383,14 +396,6 @@ mod test {
         for i in 5..(DATA_NUM - 5) {
             assert_nearly_eq!(y[i], denoised[i], 0.003);
         }
-
-        /*
-        let mut file = File::create("C:/Users/yudai/Desktop/test_lowpass.csv").unwrap();
-        for i in 0..DATA_NUM {
-            write!(file, "{},{}\n", y[i], denoised[i]).unwrap();
-        }
-        file.flush().unwrap();
-        */
     }
 
     #[test]
@@ -471,21 +476,6 @@ mod test {
         let output_posi = Arc::clone(&position);
         let output_int = Arc::clone(&intensity);
         let output_counter = Arc::clone(&counter);
-
-        /*
-        let mut file = File::create("C:/Users/yudai/Desktop/test.csv").unwrap();
-        for i in 0..2588 {
-            write!(
-                file,
-                "{},{},{}\n",
-                output_posi.lock().unwrap()[i],
-                output_int.lock().unwrap()[i],
-                output_counter.lock().unwrap()[i]
-            )
-            .unwrap();
-        }
-        file.flush().unwrap();
-        */
     }
 
     #[test]
@@ -505,14 +495,5 @@ mod test {
         assert_eq!(err, 0);
         assert_eq!(err2, 0);
         assert_eq!(length, 10000);
-
-        /*
-        let mut file = File::create("C:/Users/yudai/Desktop/test_raw.csv").unwrap();
-        for i in 0..9980 {
-            let result = convert_to_voltage(0, 0, data1[i] as f32, data2[i] as f32);
-            write!(file, "{},{}\n", result.0, result.1).unwrap();
-        }
-        file.flush().unwrap();
-        */
     }
 }
