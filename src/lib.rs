@@ -6,12 +6,13 @@ extern crate serde_json;
 
 use dotenv::dotenv;
 use helpers::{helper, operation, post};
+use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 #[no_mangle]
-pub extern "C" fn open(id: i32) -> i32 {
-    let error: i32;
+pub extern "C" fn open(id: c_short) -> i16 {
+    let error: c_short;
     unsafe {
         error = operation::TUSB0216AD_Device_Open(id);
     }
@@ -21,15 +22,15 @@ pub extern "C" fn open(id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn close(id: i32) {
+pub extern "C" fn close(id: c_short) {
     unsafe {
         operation::TUSB0216AD_Device_Close(id);
     }
 }
 
 #[no_mangle]
-pub extern "C" fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32 {
-    let error: i32;
+pub extern "C" fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) -> c_short {
+    let error: c_short;
     unsafe {
         error = operation::TUSB0216AD_AdClk_Set(id, clock_time, sel);
     }

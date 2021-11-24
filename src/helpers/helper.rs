@@ -8,7 +8,7 @@ use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
 ///
 /// * e - エラーコード
 /// * func_name - エラーの発生元のメソッド名
-pub fn parse_error(e: i32, func_name: &str) {
+pub fn parse_error(e: i16, func_name: &str) {
     match e {
         0 => {}
         1 => println!("{}: Invalid ID", func_name),
@@ -46,7 +46,7 @@ impl Data {
 /// # Argument
 ///
 /// * id - 装置のユニット番号選択スイッチの数字
-fn get_ranges(id: i32) -> (u8, u8) {
+fn get_ranges(id: c_short) -> (u8, u8) {
     let mut ch1_range: u8 = 0;
     let mut ch2_range: u8 = 0;
     let err;
@@ -58,7 +58,7 @@ fn get_ranges(id: i32) -> (u8, u8) {
     }
 
     if err != 0 {
-        parse_error(err, "TUSB0216AD_Input_Check");
+        parse_error(err as c_short, "TUSB0216AD_Input_Check");
     }
 
     (ch1_range, ch2_range)
@@ -91,7 +91,12 @@ fn calc_range_width(range: u8) -> f32 {
 /// # Returns
 ///
 /// CH1, CH2の出力電圧値
-fn convert_to_voltage(ch1_range: u8, ch2_range: u8, ch1_data: f32, ch2_data: f32) -> (f32, f32) {
+pub fn convert_to_voltage(
+    ch1_range: u8,
+    ch2_range: u8,
+    ch1_data: f32,
+    ch2_data: f32,
+) -> (f32, f32) {
     let ch1_width: f32 = calc_range_width(ch1_range);
     let ch2_width: f32 = calc_range_width(ch2_range);
 
@@ -181,17 +186,17 @@ fn update_data(
 /// * id - 装置のユニット番号選択スイッチの数字
 /// * seconds - データ取り込みを行う秒数
 /// * flag - データ取り込み中であるかを判別するフラグ
-pub fn continuous_read(id: i32, seconds: u64, flag: Arc<Mutex<i8>>) {
+pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
     println!("Timer start!");
     let sleeping_time = time::Duration::from_secs(seconds);
-    let mut error: i32;
+    let mut error: c_short;
 
     unsafe {
         // CH1, 2ともに+/-10Vの入力を受け付ける
         // 入力が+/-10VなのはSR830の仕様
         error = TUSB0216AD_Input_Set(id, 0, 0);
         parse_error(error, "TUSB0216AD_Input_Set");
-        error = TUSB0216AD_Start(id, &(2 as u8), 0, 0, 0);
+        error = TUSB0216AD_Start(id, 2, 0, 0, 0);
         parse_error(error, "TUSB0216AD_Start");
         error = TUSB0216AD_Trigger(id);
         parse_error(error, "TUSB0216AD_Trigger");
@@ -219,7 +224,7 @@ pub fn continuous_read(id: i32, seconds: u64, flag: Arc<Mutex<i8>>) {
 /// * position - CH1のデータを収納するベクトル
 /// * intensity - CH2のデータを収納するベクトル
 pub fn get_data(
-    id: i32,
+    id: c_short,
     flag: Arc<Mutex<i8>>,
     position: Arc<Mutex<Vec<f32>>>,
     intensity: Arc<Mutex<Vec<f32>>>,
