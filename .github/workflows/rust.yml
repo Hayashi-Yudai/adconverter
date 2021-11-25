@@ -17,6 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Run tests
-      run: cargo test --verbose --features debug --release
+      run: cargo test --verbose --release
       env:
         DATA_POST_URL: http://localhost:8000/core/rapid-scan-data/
