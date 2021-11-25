@@ -458,10 +458,6 @@ mod test {
         post_data.join().unwrap();
 
         assert_eq!(*Arc::clone(&flag).lock().unwrap(), 1);
-
-        let output_posi = Arc::clone(&position);
-        let output_int = Arc::clone(&intensity);
-        let output_counter = Arc::clone(&counter);
     }
 
     #[test]
