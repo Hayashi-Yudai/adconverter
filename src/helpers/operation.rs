@@ -1,4 +1,7 @@
+#[cfg(not(feature = "debug"))]
 use std::f64::consts::PI;
+
+use crate::helpers::helper;
 use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 
 /// TUSB16ADのドライバに定義されいるMicrosoft Visual Cインターフェース群
@@ -82,24 +85,104 @@ pub struct DeviceStatus {
 impl DeviceStatus {
     fn new(status: c_uchar, ch1_datalen: c_uint, ch2_datalen: c_uint) -> Self {
         DeviceStatus {
-            status: status,
-            ch1_datalen: ch1_datalen,
-            ch2_datalen: ch2_datalen,
+            status,
+            ch1_datalen,
+            ch2_datalen,
         }
     }
 }
 
+/// Open device with specified ID
+pub fn open(id: c_short) {
+    let mut error: c_short = 0;
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Device_Open(id);
+        }
+    }
+
+    #[cfg(not(feature = "release"))]
+    {
+        match id {
+            1 => error = 0,
+            _ => error = 5,
+        }
+    }
+
+    helper::parse_error(error, "TUSB0216AD_Device_Open");
+}
+
+/// Close the connection with the device
+pub fn close(id: c_short) {
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            TUSB0216AD_Device_Close(id);
+        }
+    }
+}
+
+pub fn single_data(id: c_short, data: *mut c_int) {
+    #[cfg(feature = "release")]
+    {
+        let mut error: c_short;
+        unsafe {
+            error = TUSB0216AD_Ad_Single(id, data);
+        }
+
+        helper::parse_error(error, "TUSB0216AD_Ad_Single");
+    }
+}
+
+pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_ch: c_uchar) {
+    let mut error: c_short = 0;
+
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Start(id, ch, prelen, trig_type, trig_ch);
+        }
+    }
+    #[cfg(not(feature = "release"))]
+    {
+        if id != 1 || ch > 2 || trig_type > 3 || trig_ch > 1 {
+            error = 5;
+        }
+    }
+    helper::parse_error(error, "TUSB0216AD_Start");
+}
+
+pub fn stop(id: c_short) {
+    let error: c_short;
+
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Stop(id);
+            helper::parse_error(error, "TUSB0216AD_Stop");
+        }
+    }
+}
+
+/// Show the device status
+///
+/// * verbose: bool
+///     if true, it prints the status on the screen
 pub fn status(verbose: bool) -> DeviceStatus {
     let mut status = 1 as u8;
     let mut overflow = [0, 0];
     let mut datalen = [0, 0];
-    unsafe {
-        TUSB0216AD_Ad_Status(
-            0,
-            &mut status as *mut u8,
-            overflow.as_mut_ptr(),
-            datalen.as_mut_ptr(),
-        );
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            TUSB0216AD_Ad_Status(
+                0,
+                &mut status as *mut u8,
+                overflow.as_mut_ptr(),
+                datalen.as_mut_ptr(),
+            );
+        }
     }
 
     match verbose {
@@ -116,147 +199,122 @@ pub fn status(verbose: bool) -> DeviceStatus {
     DeviceStatus::new(status, datalen[0], datalen[1])
 }
 
-// Debug用 mock
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Device_Open(id: c_short) -> c_short {
-    match id {
-        1 => 0,
-        _ => 5,
+pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_uint) {
+    let mut error: c_short = 0;
+
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Ad_Data(id, ch, data, length);
+        }
     }
+    #[cfg(not(feature = "release"))]
+    {
+        unsafe {
+            if id != 1 {
+                error = 5;
+            }
+
+            if ch != 0 && ch != 1 {
+                error = 8;
+            } else {
+                *length = 10000;
+                for i in 0..10000 {
+                    *data.offset(i) = (2f32.powf(15.0)
+                        * ((2e-4 * 2.0 * PI as f32 * i as f32).sin() + 1.0))
+                        as i32;
+                }
+                error = 0;
+            }
+        }
+    }
+    helper::parse_error(error, "TUSB0216AD_Ad_Data");
 }
 
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Device_Close(id: c_short) -> c_short {
-    match id {
-        1 => 0,
-        _ => 5,
+pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
+    let mut error: c_short = 0;
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_AdClk_Set(id, clock_time, sel);
+        }
     }
+    #[cfg(not(feature = "release"))]
+    {
+        if id != 1 {
+            error = 5;
+        }
+
+        if clock_time < 500 {
+            error = 8;
+        }
+
+        if sel != 0 && sel != 1 {
+            error = 8;
+        }
+    }
+    helper::parse_error(error, "TUSB0216AD_AdClk_Set");
 }
 
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_AdClk_Set(id: c_short, clock_time: c_int, sel: c_uchar) -> c_short {
-    if id != 1 {
-        return 5;
+/// Change input range of each channel.
+/// Specify the input ranges with a number.
+/// 0: +/-10 V, 1: +/-5V, 2: +/-2.5 V, 3: +/-1.25V
+/// 4: 10 V, 5: 5 V, 6: 2.5 V
+///
+/// * `id` - Device number
+/// * `type1` - input range of CH1
+/// * `type2` - input range of CH2
+pub fn input_set(id: c_short, type1: c_uchar, type2: c_uchar) {
+    let mut error: c_short = 0;
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Input_Set(id, type1, type2);
+        }
     }
-
-    if clock_time < 500 {
-        return 8;
+    #[cfg(not(feature = "release"))]
+    {
+        if id != 1 || type1 > 6 || type2 > 6 {
+            error = 5;
+        }
     }
-
-    if sel != 0 && sel != 1 {
-        return 8;
-    }
-
-    0
+    helper::parse_error(error, "TUSB0216AD_Input_Set");
 }
 
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Start(
-    id: c_short,
-    ch: c_uchar,
-    _PreLen: c_int,
-    TrigType: c_uchar,
-    TrgCh: c_uchar,
-) -> c_short {
-    if id != 1 || ch > 2 || TrigType > 3 || TrgCh > 1 {
-        return 5;
+pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
+    let mut error: c_short = 0;
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Input_Check(id, type1, type2);
+        }
     }
-
-    0
+    #[cfg(not(feature = "release"))]
+    {
+        unsafe {
+            if id != 1 {
+                error = 5;
+            }
+            *type1 = 0;
+            *type2 = 0;
+        }
+    }
+    helper::parse_error(error, "TUSB0216AD_Input_Check");
 }
 
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Stop(id: c_short) -> c_short {
-    if id != 1 {
-        return 5;
+pub fn trigger(id: c_short) {
+    let mut error: c_short = 0;
+    #[cfg(feature = "release")]
+    {
+        unsafe {
+            error = TUSB0216AD_Trigger(id);
+        }
     }
-
-    0
-}
-
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Input_Set(id: c_short, type1: c_uchar, type2: c_uchar) -> c_short {
-    if id != 1 || type1 > 6 || type2 > 6 {
-        return 5;
+    #[cfg(not(feature = "release"))]
+    {
+        if id != 1 {
+            error = 5;
+        }
     }
-    0
-}
-
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Input_Check(
-    id: c_short,
-    type1: *mut c_uchar,
-    type2: *mut c_uchar,
-) -> c_short {
-    if id != 1 {
-        return 5;
-    }
-    *type1 = 0;
-    *type2 = 0;
-
-    0
-}
-
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Trigger(id: c_short) -> c_short {
-    if id != 1 {
-        return 5;
-    }
-    0
-}
-
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Ad_Data(
-    id: c_short,
-    ch: c_uchar,
-    data: *mut c_int,
-    datalen: *mut c_uint,
-) -> c_short {
-    if id != 1 {
-        return 5;
-    }
-
-    if ch != 0 && ch != 1 {
-        return 8;
-    }
-    *datalen = 10000;
-    for i in 0..10000 {
-        *data.offset(i) =
-            (2f32.powf(15.0) * ((2e-4 * 2.0 * PI as f32 * i as f32).sin() + 1.0)) as i32;
-    }
-    0
-}
-
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Ad_Single(id: c_short, _Data: *mut c_int) -> c_short {
-    if id != 1 {
-        return 5;
-    }
-
-    return 0;
-}
-
-#[cfg(feature = "debug")]
-#[allow(non_snake_case)]
-pub unsafe fn TUSB0216AD_Ad_Status(
-    id: c_short,
-    _status: *mut c_uchar,
-    _overflow: *mut c_uchar,
-    _datalen: *mut c_uint,
-) -> c_short {
-    if id != 1 {
-        return 5;
-    }
-
-    return 0;
+    helper::parse_error(error, "TUSB0216AD_Trigger");
 }

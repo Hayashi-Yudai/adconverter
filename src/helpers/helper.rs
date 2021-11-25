@@ -2,7 +2,7 @@ use crate::helpers::operation::*;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
-use std::os::raw::{c_short, c_uint};
+use std::os::raw::{c_short, c_uchar, c_uint};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
@@ -53,17 +53,10 @@ impl Data {
 fn get_ranges(id: c_short) -> (u8, u8) {
     let mut ch1_range: u8 = 0;
     let mut ch2_range: u8 = 0;
-    let err;
 
-    unsafe {
-        let ch1_range_prt = &mut ch1_range;
-        let ch2_range_prt = &mut ch2_range;
-        err = TUSB0216AD_Input_Check(id, ch1_range_prt, ch2_range_prt);
-    }
-
-    if err != 0 {
-        parse_error(err as c_short, "TUSB0216AD_Input_Check");
-    }
+    let ch1_range_ptr = &mut ch1_range as *mut c_uchar;
+    let ch2_range_ptr = &mut ch2_range as *mut c_uchar;
+    input_check(id, ch1_range_ptr, ch2_range_ptr);
 
     (ch1_range, ch2_range)
 }
@@ -193,28 +186,18 @@ fn update_data(
 pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
     println!("Timer start!");
     let sleeping_time = time::Duration::from_secs(seconds);
-    let mut error: c_short;
 
-    unsafe {
-        // CH1, 2ともに+/-10Vの入力を受け付ける
-        // 入力が+/-10VなのはSR830の仕様
-        error = TUSB0216AD_Input_Set(id, 0, 0);
-        parse_error(error, "TUSB0216AD_Input_Set");
-        error = TUSB0216AD_AdClk_Set(id, 500, 0);
-        parse_error(error, "TUSB0216AD_AdClk_Set");
-        error = TUSB0216AD_Start(id, 2, 0, 0, 0);
-        parse_error(error, "TUSB0216AD_Start");
-        error = TUSB0216AD_Trigger(id);
-        parse_error(error, "TUSB0216AD_Trigger");
-    }
+    // CH1, 2ともに+/-10Vの入力を受け付ける
+    // 入力が+/-10VなのはSR830の仕様
+    input_set(id, 0, 0);
+    set_clock(id, 500, 0);
+    start(id, 2, 0, 0, 0);
+    trigger(id);
 
     *flag.lock().unwrap() = 0; // 計測開始のフラグを立てる
     thread::sleep(sleeping_time);
 
-    unsafe {
-        error = TUSB0216AD_Stop(id);
-        parse_error(error, "TUSB0216AD_Stop");
-    }
+    stop(id);
 
     *flag.lock().unwrap() = 1; // 計測終了のフラグを立てる
     println!("Timer stopped");
@@ -261,10 +244,8 @@ pub fn get_data(
         if device_status.status == 3 {
             length = min(device_status.ch1_datalen, device_status.ch2_datalen);
             let l_ptr = &mut length as *mut u32;
-            unsafe {
-                TUSB0216AD_Ad_Data(id, 0, data1.as_mut_ptr(), l_ptr);
-                TUSB0216AD_Ad_Data(id, 1, data2.as_mut_ptr(), l_ptr);
-            }
+            takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
+            takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
         } else {
             continue;
         }
@@ -490,15 +471,9 @@ mod test {
         let mut data1 = [0; MAX_LENGTH];
         let mut data2 = [0; MAX_LENGTH];
         let l_ptr = &mut length as *mut u32;
-        let err;
-        let err2;
-        unsafe {
-            err = TUSB0216AD_Ad_Data(1, 0, data1.as_mut_ptr(), l_ptr);
-            err2 = TUSB0216AD_Ad_Data(1, 1, data2.as_mut_ptr(), l_ptr);
-        }
+        takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
+        takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
 
-        assert_eq!(err, 0);
-        assert_eq!(err2, 0);
         assert_eq!(length, 10000);
     }
 }

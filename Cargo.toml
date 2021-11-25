@@ -5,9 +5,7 @@ name = "adconverter"
 version = "0.1.0"
 
 [features]
-default = []
 release = []
-debug = []
 
 [dependencies]
 synthrs = { git = "https://github.com/gyng/synthrs" }
