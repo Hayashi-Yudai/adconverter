@@ -1,4 +1,4 @@
-#[cfg(not(feature = "debug"))]
+#[cfg(not(feature = "release"))]
 use std::f64::consts::PI;
 
 use crate::helpers::helper;
@@ -94,23 +94,24 @@ impl DeviceStatus {
 
 /// Open device with specified ID
 pub fn open(id: c_short) {
-    let mut error: c_short = 0;
     #[cfg(feature = "release")]
     {
+        let error: c_short;
         unsafe {
             error = TUSB0216AD_Device_Open(id);
         }
+        helper::parse_error(error, "TUSB0216AD_Device_Open");
     }
 
     #[cfg(not(feature = "release"))]
     {
+        let error: c_short;
         match id {
             1 => error = 0,
             _ => error = 5,
         }
+        helper::parse_error(error, "TUSB0216AD_Device_Open");
     }
-
-    helper::parse_error(error, "TUSB0216AD_Device_Open");
 }
 
 /// Close the connection with the device
@@ -123,10 +124,11 @@ pub fn close(id: c_short) {
     }
 }
 
+#[allow(dead_code)]
 pub fn single_data(id: c_short, data: *mut c_int) {
     #[cfg(feature = "release")]
     {
-        let mut error: c_short;
+        let error: c_short;
         unsafe {
             error = TUSB0216AD_Ad_Single(id, data);
         }
@@ -136,7 +138,7 @@ pub fn single_data(id: c_short, data: *mut c_int) {
 }
 
 pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_ch: c_uchar) {
-    let mut error: c_short = 0;
+    let error: c_short;
 
     #[cfg(feature = "release")]
     {
@@ -146,8 +148,10 @@ pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_c
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 || ch > 2 || trig_type > 3 || trig_ch > 1 {
+        if id != 1 || ch > 2 || prelen < 0 || trig_type > 3 || trig_ch > 1 {
             error = 5;
+        } else {
+            error = 0;
         }
     }
     helper::parse_error(error, "TUSB0216AD_Start");
@@ -155,14 +159,21 @@ pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_c
 
 pub fn stop(id: c_short) {
     let error: c_short;
-
     #[cfg(feature = "release")]
     {
         unsafe {
             error = TUSB0216AD_Stop(id);
-            helper::parse_error(error, "TUSB0216AD_Stop");
         }
     }
+    #[cfg(not(feature = "release"))]
+    {
+        if id != 1 {
+            error = 5;
+        } else {
+            error = 0;
+        }
+    }
+    helper::parse_error(error, "TUSB0216AD_Stop");
 }
 
 /// Show the device status
@@ -200,7 +211,7 @@ pub fn status(verbose: bool) -> DeviceStatus {
 }
 
 pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_uint) {
-    let mut error: c_short = 0;
+    let mut error: c_short;
 
     #[cfg(feature = "release")]
     {
@@ -210,11 +221,11 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     }
     #[cfg(not(feature = "release"))]
     {
+        if id != 1 {
+            error = 5;
+            helper::parse_error(error, "TUSB0216AD_Ad_Data");
+        }
         unsafe {
-            if id != 1 {
-                error = 5;
-            }
-
             if ch != 0 && ch != 1 {
                 error = 8;
             } else {
@@ -232,7 +243,7 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
 }
 
 pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
-    let mut error: c_short = 0;
+    let mut error: c_short;
     #[cfg(feature = "release")]
     {
         unsafe {
@@ -241,6 +252,7 @@ pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
     }
     #[cfg(not(feature = "release"))]
     {
+        error = 0;
         if id != 1 {
             error = 5;
         }
@@ -265,7 +277,7 @@ pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
 /// * `type1` - input range of CH1
 /// * `type2` - input range of CH2
 pub fn input_set(id: c_short, type1: c_uchar, type2: c_uchar) {
-    let mut error: c_short = 0;
+    let error: c_short;
     #[cfg(feature = "release")]
     {
         unsafe {
@@ -276,13 +288,15 @@ pub fn input_set(id: c_short, type1: c_uchar, type2: c_uchar) {
     {
         if id != 1 || type1 > 6 || type2 > 6 {
             error = 5;
+        } else {
+            error = 0;
         }
     }
     helper::parse_error(error, "TUSB0216AD_Input_Set");
 }
 
 pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
-    let mut error: c_short = 0;
+    let error: c_short;
     #[cfg(feature = "release")]
     {
         unsafe {
@@ -294,6 +308,8 @@ pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
         unsafe {
             if id != 1 {
                 error = 5;
+            } else {
+                error = 0;
             }
             *type1 = 0;
             *type2 = 0;
@@ -303,7 +319,7 @@ pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
 }
 
 pub fn trigger(id: c_short) {
-    let mut error: c_short = 0;
+    let error: c_short;
     #[cfg(feature = "release")]
     {
         unsafe {
@@ -314,6 +330,8 @@ pub fn trigger(id: c_short) {
     {
         if id != 1 {
             error = 5;
+        } else {
+            error = 0;
         }
     }
     helper::parse_error(error, "TUSB0216AD_Trigger");
