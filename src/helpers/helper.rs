@@ -260,7 +260,6 @@ pub fn write_to_csv(file_name: &str, x: &Vec<f32>, y: &Vec<f32>) {
 mod test {
     use super::*;
     use crate::helpers::post;
-    use crate::operations::interface;
     use dotenv::dotenv;
     use nearly_eq::*;
     use rand::Rng;
@@ -422,18 +421,5 @@ mod test {
         post_data.join().unwrap();
 
         assert_eq!(*Arc::clone(&flag).lock().unwrap(), 1);
-    }
-
-    #[test]
-    fn test_ad_data_mock() {
-        const MAX_LENGTH: usize = 100000;
-        let mut length = MAX_LENGTH as u32;
-        let mut data1 = [0; MAX_LENGTH];
-        let mut data2 = [0; MAX_LENGTH];
-        let l_ptr = &mut length as *mut u32;
-        interface::takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
-        interface::takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
-
-        assert_eq!(length, 10000);
     }
 }

@@ -249,3 +249,21 @@ pub fn trigger(id: c_short) {
     }
     utils::parse_error(error, "TUSB0216AD_Trigger");
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ad_data_mock() {
+        const MAX_LENGTH: usize = 100000;
+        let mut length = MAX_LENGTH as u32;
+        let mut data1 = [0; MAX_LENGTH];
+        let mut data2 = [0; MAX_LENGTH];
+        let l_ptr = &mut length as *mut u32;
+        takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
+        takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
+
+        assert_eq!(length, 10000);
+    }
+}
