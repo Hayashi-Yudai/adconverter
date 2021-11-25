@@ -56,7 +56,6 @@ pub extern "C" fn test_run() {
 
     let mut store: Vec<c_int> = vec![];
 
-    let mut err: c_short;
     operation::open(0);
     operation::set_clock(0, 500, 0);
     operation::input_set(0, 0, 0);
