@@ -1,5 +1,5 @@
+use super::utils;
 use super::*;
-use crate::helpers::helper;
 use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 
 #[cfg(not(feature = "release"))]
@@ -13,7 +13,7 @@ pub fn open(id: c_short) {
         unsafe {
             error = TUSB0216AD_Device_Open(id);
         }
-        helper::parse_error(error, "TUSB0216AD_Device_Open");
+        utils::parse_error(error, "TUSB0216AD_Device_Open");
     }
 
     #[cfg(not(feature = "release"))]
@@ -23,7 +23,7 @@ pub fn open(id: c_short) {
             1 => error = 0,
             _ => error = 5,
         }
-        helper::parse_error(error, "TUSB0216AD_Device_Open");
+        utils::parse_error(error, "TUSB0216AD_Device_Open");
     }
 }
 
@@ -46,7 +46,7 @@ pub fn single_data(id: c_short, data: *mut c_int) {
             error = TUSB0216AD_Ad_Single(id, data);
         }
 
-        helper::parse_error(error, "TUSB0216AD_Ad_Single");
+        utils::parse_error(error, "TUSB0216AD_Ad_Single");
     }
 }
 
@@ -67,7 +67,7 @@ pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_c
             error = 0;
         }
     }
-    helper::parse_error(error, "TUSB0216AD_Start");
+    utils::parse_error(error, "TUSB0216AD_Start");
 }
 
 pub fn stop(id: c_short) {
@@ -86,7 +86,7 @@ pub fn stop(id: c_short) {
             error = 0;
         }
     }
-    helper::parse_error(error, "TUSB0216AD_Stop");
+    utils::parse_error(error, "TUSB0216AD_Stop");
 }
 
 /// Show the device status
@@ -136,7 +136,7 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     {
         if id != 1 {
             error = 5;
-            helper::parse_error(error, "TUSB0216AD_Ad_Data");
+            utils::parse_error(error, "TUSB0216AD_Ad_Data");
         }
         unsafe {
             if ch != 0 && ch != 1 {
@@ -152,7 +152,7 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
             }
         }
     }
-    helper::parse_error(error, "TUSB0216AD_Ad_Data");
+    utils::parse_error(error, "TUSB0216AD_Ad_Data");
 }
 
 pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
@@ -178,7 +178,7 @@ pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
             error = 8;
         }
     }
-    helper::parse_error(error, "TUSB0216AD_AdClk_Set");
+    utils::parse_error(error, "TUSB0216AD_AdClk_Set");
 }
 
 /// Change input range of each channel.
@@ -205,7 +205,7 @@ pub fn input_set(id: c_short, type1: c_uchar, type2: c_uchar) {
             error = 0;
         }
     }
-    helper::parse_error(error, "TUSB0216AD_Input_Set");
+    utils::parse_error(error, "TUSB0216AD_Input_Set");
 }
 
 pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
@@ -228,7 +228,7 @@ pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
             *type2 = 0;
         }
     }
-    helper::parse_error(error, "TUSB0216AD_Input_Check");
+    utils::parse_error(error, "TUSB0216AD_Input_Check");
 }
 
 pub fn trigger(id: c_short) {
@@ -247,5 +247,5 @@ pub fn trigger(id: c_short) {
             error = 0;
         }
     }
-    helper::parse_error(error, "TUSB0216AD_Trigger");
+    utils::parse_error(error, "TUSB0216AD_Trigger");
 }

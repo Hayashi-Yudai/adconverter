@@ -1,6 +1,7 @@
 use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 
 pub mod interface;
+mod utils;
 
 pub struct DeviceStatus {
     pub status: c_uchar,
