@@ -1,4 +1,4 @@
-use crate::helpers::operation::*;
+use crate::operations::interface;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
@@ -56,7 +56,7 @@ fn get_ranges(id: c_short) -> (u8, u8) {
 
     let ch1_range_ptr = &mut ch1_range as *mut c_uchar;
     let ch2_range_ptr = &mut ch2_range as *mut c_uchar;
-    input_check(id, ch1_range_ptr, ch2_range_ptr);
+    interface::input_check(id, ch1_range_ptr, ch2_range_ptr);
 
     (ch1_range, ch2_range)
 }
@@ -189,15 +189,15 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
 
     // CH1, 2ともに+/-10Vの入力を受け付ける
     // 入力が+/-10VなのはSR830の仕様
-    input_set(id, 0, 0);
-    set_clock(id, 500, 0);
-    start(id, 2, 0, 0, 0);
-    trigger(id);
+    interface::input_set(id, 0, 0);
+    interface::set_clock(id, 500, 0);
+    interface::start(id, 2, 0, 0, 0);
+    interface::trigger(id);
 
     *flag.lock().unwrap() = 0; // 計測開始のフラグを立てる
     thread::sleep(sleeping_time);
 
-    stop(id);
+    interface::stop(id);
 
     *flag.lock().unwrap() = 1; // 計測終了のフラグを立てる
     println!("Timer stopped");
@@ -239,13 +239,13 @@ pub fn get_data(
         if *flag.lock().unwrap() == 1 {
             break;
         }
-        let device_status = status(false);
+        let device_status = interface::status(false);
 
         if device_status.status == 3 {
             length = min(device_status.ch1_datalen, device_status.ch2_datalen);
             let l_ptr = &mut length as *mut u32;
-            takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
-            takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
+            interface::takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
+            interface::takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
         } else {
             continue;
         }
@@ -297,6 +297,7 @@ pub fn write_to_csv(file_name: &str, x: &Vec<f32>, y: &Vec<f32>) {
 mod test {
     use super::*;
     use crate::helpers::post;
+    use crate::operations::interface;
     use dotenv::dotenv;
     use nearly_eq::*;
     use rand::Rng;
@@ -467,8 +468,8 @@ mod test {
         let mut data1 = [0; MAX_LENGTH];
         let mut data2 = [0; MAX_LENGTH];
         let l_ptr = &mut length as *mut u32;
-        takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
-        takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
+        interface::takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
+        interface::takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
 
         assert_eq!(length, 10000);
     }

@@ -1,11 +1,13 @@
 mod helpers;
+mod operations;
 
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 
 use dotenv::dotenv;
-use helpers::{helper, operation, post};
+use helpers::{helper, post};
+use operations::interface;
 use std::os::raw::{c_int, c_short, c_uint};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -56,19 +58,19 @@ pub extern "C" fn test_run() {
 
     let mut store: Vec<c_int> = vec![];
 
-    operation::open(0);
-    operation::set_clock(0, 500, 0);
-    operation::input_set(0, 0, 0);
-    operation::start(0, 0, 0, 0, 0);
-    operation::trigger(0);
+    interface::open(0);
+    interface::set_clock(0, 500, 0);
+    interface::input_set(0, 0, 0);
+    interface::start(0, 0, 0, 0, 0);
+    interface::trigger(0);
 
     for _ in 0..100 {
         let mut data1 = [0 as c_int; MAX_LENGTH];
-        let device_status = operation::status(true);
+        let device_status = interface::status(true);
         length = device_status.ch1_datalen;
 
         if device_status.status == 3 {
-            operation::takeout_data(0, 0, data1.as_mut_ptr(), &mut length as *mut u32);
+            interface::takeout_data(0, 0, data1.as_mut_ptr(), &mut length as *mut u32);
         }
 
         for i in 0..length as usize {
@@ -77,8 +79,8 @@ pub extern "C" fn test_run() {
         println!("length: {}", length);
     }
 
-    operation::stop(0);
-    operation::close(0);
+    interface::stop(0);
+    interface::close(0);
 
     let mut a: Vec<f32> = vec![];
     for i in 0..store.len() as usize {
