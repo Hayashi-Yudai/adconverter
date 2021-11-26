@@ -94,13 +94,13 @@ fn lowpass(sample: Vec<f32>) -> Vec<f32> {
 // ステージのポジション(tmp1)ごとにデータをまとめる
 // +/-10Vとして位置測定をしていると仮定している
 fn update_data(
-    x: Vec<f32>,
-    y: Vec<f32>,
+    x: &Vec<f32>,
+    y: &Vec<f32>,
     position: &mut MutexGuard<Vec<f32>>,
     intensity: &mut MutexGuard<Vec<f32>>,
     counter: &mut MutexGuard<Vec<u32>>,
 ) {
-    // 10 V = 3.75 μm -> 10/10000 V = 375 nm
+    // 10 V = 3.75 mm -> 10/10000 V = 375 nm
     let dataset = x
         .iter()
         .zip(y.iter())
@@ -232,12 +232,16 @@ pub fn get_data(
         let position_denoised = lowpass(tmp1);
 
         // position, intensity に値を入れる
-        let mut position = position.lock().unwrap();
-        let mut intensity = intensity.lock().unwrap();
-        let mut counter = counter.lock().unwrap();
+        let mut position = position
+            .lock()
+            .expect("Failed to lock position: job_runner");
+        let mut intensity = intensity
+            .lock()
+            .expect("Failed to lock intensity: job_runner");
+        let mut counter = counter.lock().expect("Failed to lock counter: job_runner");
         update_data(
-            position_denoised,
-            tmp2,
+            &position_denoised,
+            &tmp2,
             &mut position,
             &mut intensity,
             &mut counter,
@@ -356,8 +360,8 @@ mod test {
         let counter = Mutex::new(vec![1, 2, 1]);
 
         update_data(
-            x,
-            y,
+            &x,
+            &y,
             &mut position.lock().unwrap(),
             &mut intensity.lock().unwrap(),
             &mut counter.lock().unwrap(),

@@ -33,7 +33,7 @@ pub fn post_data(
     let client = reqwest::Client::new();
     let url = env::var("DATA_POST_URL").expect("DATA_POST_URL is not set");
     loop {
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(300));
         let x = position.lock().expect("Failed to lock position");
         let y = intensity.lock().expect("Failed to lock intensity");
 
