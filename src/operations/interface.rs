@@ -6,7 +6,8 @@ use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 use std::f64::consts::PI;
 
 /// Open device with specified ID
-pub fn open(id: c_short) {
+#[no_mangle]
+pub extern "C" fn open(id: c_short) {
     #[cfg(feature = "release")]
     {
         let error: c_short;
@@ -28,7 +29,8 @@ pub fn open(id: c_short) {
 }
 
 /// Close the connection with the device
-pub fn close(id: c_short) {
+#[no_mangle]
+pub extern "C" fn close(id: c_short) {
     #[cfg(feature = "release")]
     {
         unsafe {
@@ -155,7 +157,8 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     utils::parse_error(error, "TUSB0216AD_Ad_Data");
 }
 
-pub fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
+#[no_mangle]
+pub extern "C" fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
     let mut error: c_short;
     #[cfg(feature = "release")]
     {
