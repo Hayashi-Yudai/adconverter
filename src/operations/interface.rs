@@ -4,6 +4,7 @@ use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 
 #[cfg(not(feature = "release"))]
 use rand::Rng;
+#[cfg(not(feature = "release"))]
 use std::f64::consts::PI;
 
 /// Open device with specified ID
@@ -31,22 +32,22 @@ pub extern "C" fn open(id: c_short) {
 
 /// Close the connection with the device
 #[no_mangle]
-pub extern "C" fn close(id: c_short) {
+pub extern "C" fn close(_id: c_short) {
     #[cfg(feature = "release")]
     {
         unsafe {
-            TUSB0216AD_Device_Close(id);
+            TUSB0216AD_Device_Close(_id);
         }
     }
 }
 
 #[allow(dead_code)]
-pub fn single_data(id: c_short, data: *mut c_int) {
+pub fn single_data(_id: c_short, _data: *mut c_int) {
     #[cfg(feature = "release")]
     {
         let error: c_short;
         unsafe {
-            error = TUSB0216AD_Ad_Single(id, data);
+            error = TUSB0216AD_Ad_Single(_id, _data);
         }
 
         utils::parse_error(error, "TUSB0216AD_Ad_Single");
@@ -140,6 +141,7 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     {
         unsafe {
             error = TUSB0216AD_Ad_Data(id, ch, data, length);
+            println!("Ad_Data: {}", error);
         }
     }
     #[cfg(not(feature = "release"))]
@@ -281,6 +283,6 @@ mod test {
         takeout_data(0, 0, data1.as_mut_ptr(), l_ptr);
         takeout_data(0, 1, data2.as_mut_ptr(), l_ptr);
 
-        assert_eq!(length, 10000);
+        assert_eq!(length, 100000);
     }
 }

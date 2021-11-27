@@ -110,6 +110,7 @@ fn update_data(
 
     // aggregation
     let mut data_bank: Vec<Data> = Vec::new();
+    println!("Data Length: {}", position.len());
     for d in dataset.iter() {
         match position.iter().position(|data| *data == d.0) {
             Some(index) => {
