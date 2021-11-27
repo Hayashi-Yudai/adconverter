@@ -115,7 +115,6 @@ pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDat
             break;
         }
         let device_status = interface::status(false);
-        println!("Retreiving");
 
         if device_status.status == 3 {
             length = min(device_status.ch1_datalen, device_status.ch2_datalen);
@@ -208,10 +207,6 @@ mod test {
         let correct_ys = [0, 1, 5, 9, 16];
         let correct_lens = [2, 1, 3, 1, 2];
         for i in 0..5 {
-            println!("x: {}", dataset[i].x);
-            println!("y: {}", dataset[i].len);
-            println!("len: {}", dataset[i].len);
-            println!("");
             assert_eq!(dataset[i].x, i as i32);
             assert_eq!(dataset[i].y, correct_ys[i]);
             assert_eq!(dataset[i].len, correct_lens[i]);
