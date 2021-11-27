@@ -3,6 +3,8 @@ use super::*;
 use std::os::raw::{c_int, c_short, c_uchar, c_uint};
 
 #[cfg(not(feature = "release"))]
+use rand::Rng;
+#[cfg(not(feature = "release"))]
 use std::f64::consts::PI;
 
 /// Open device with specified ID
@@ -21,7 +23,7 @@ pub extern "C" fn open(id: c_short) {
     {
         let error: c_short;
         match id {
-            1 => error = 0,
+            0 => error = 0,
             _ => error = 5,
         }
         utils::parse_error(error, "TUSB0216AD_Device_Open");
@@ -30,22 +32,22 @@ pub extern "C" fn open(id: c_short) {
 
 /// Close the connection with the device
 #[no_mangle]
-pub extern "C" fn close(id: c_short) {
+pub extern "C" fn close(_id: c_short) {
     #[cfg(feature = "release")]
     {
         unsafe {
-            TUSB0216AD_Device_Close(id);
+            TUSB0216AD_Device_Close(_id);
         }
     }
 }
 
 #[allow(dead_code)]
-pub fn single_data(id: c_short, data: *mut c_int) {
+pub fn single_data(_id: c_short, _data: *mut c_int) {
     #[cfg(feature = "release")]
     {
         let error: c_short;
         unsafe {
-            error = TUSB0216AD_Ad_Single(id, data);
+            error = TUSB0216AD_Ad_Single(_id, _data);
         }
 
         utils::parse_error(error, "TUSB0216AD_Ad_Single");
@@ -63,7 +65,7 @@ pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_c
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 || ch > 2 || prelen < 0 || trig_type > 3 || trig_ch > 1 {
+        if id != 0 || ch > 2 || prelen < 0 || trig_type > 3 || trig_ch > 1 {
             error = 5;
         } else {
             error = 0;
@@ -82,7 +84,7 @@ pub fn stop(id: c_short) {
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 {
+        if id != 0 {
             error = 5;
         } else {
             error = 0;
@@ -96,9 +98,9 @@ pub fn stop(id: c_short) {
 /// * verbose: bool
 ///     if true, it prints the status on the screen
 pub fn status(verbose: bool) -> DeviceStatus {
-    let mut status = 1 as u8;
-    let mut overflow = [0, 0];
-    let mut datalen = [0, 0];
+    let mut status: u8 = 1;
+    let mut overflow: [u8; 2] = [0, 0];
+    let mut datalen: [u32; 2] = [0, 0];
     #[cfg(feature = "release")]
     {
         unsafe {
@@ -109,6 +111,13 @@ pub fn status(verbose: bool) -> DeviceStatus {
                 datalen.as_mut_ptr(),
             );
         }
+    }
+
+    #[cfg(not(feature = "release"))]
+    {
+        status = 3;
+        overflow = [0, 0];
+        datalen = [10000, 10000];
     }
 
     match verbose {
@@ -132,11 +141,14 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     {
         unsafe {
             error = TUSB0216AD_Ad_Data(id, ch, data, length);
+            println!("Ad_Data: {}", error);
         }
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 {
+        let mut rng = rand::thread_rng();
+
+        if id != 0 {
             error = 5;
             utils::parse_error(error, "TUSB0216AD_Ad_Data");
         }
@@ -144,11 +156,15 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
             if ch != 0 && ch != 1 {
                 error = 8;
             } else {
-                *length = 10000;
-                for i in 0..10000 {
-                    *data.offset(i) = (2f32.powf(15.0)
-                        * ((2e-4 * 2.0 * PI as f32 * i as f32).sin() + 1.0))
-                        as i32;
+                *length = 100000;
+                let height = 2f32.powf(15.0);
+
+                for i in 0..100000 {
+                    let phase = 2e-4 * 2.0 * PI as f32 * i as f32;
+                    let random: f32 = rng.gen();
+                    let noise = 1e3 * random;
+
+                    *data.offset(i) = (height * (phase.sin() + 1.0) + noise) as i32;
                 }
                 error = 0;
             }
@@ -169,7 +185,7 @@ pub extern "C" fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
     #[cfg(not(feature = "release"))]
     {
         error = 0;
-        if id != 1 {
+        if id != 0 {
             error = 5;
         }
 
@@ -202,7 +218,7 @@ pub fn input_set(id: c_short, type1: c_uchar, type2: c_uchar) {
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 || type1 > 6 || type2 > 6 {
+        if id != 0 || type1 > 6 || type2 > 6 {
             error = 5;
         } else {
             error = 0;
@@ -222,7 +238,7 @@ pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
     #[cfg(not(feature = "release"))]
     {
         unsafe {
-            if id != 1 {
+            if id != 0 {
                 error = 5;
             } else {
                 error = 0;
@@ -244,7 +260,7 @@ pub fn trigger(id: c_short) {
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 {
+        if id != 0 {
             error = 5;
         } else {
             error = 0;
@@ -264,9 +280,9 @@ mod test {
         let mut data1 = [0; MAX_LENGTH];
         let mut data2 = [0; MAX_LENGTH];
         let l_ptr = &mut length as *mut u32;
-        takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
-        takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
+        takeout_data(0, 0, data1.as_mut_ptr(), l_ptr);
+        takeout_data(0, 1, data2.as_mut_ptr(), l_ptr);
 
-        assert_eq!(length, 10000);
+        assert_eq!(length, 100000);
     }
 }

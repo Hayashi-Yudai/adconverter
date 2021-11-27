@@ -1,8 +1,12 @@
-use std::os::raw::{c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_uchar, c_uint};
+
+#[cfg(feature = "release")]
+use std::os::raw::{c_int, c_short};
 
 pub mod interface;
 mod utils;
 
+#[derive(Debug)]
 pub struct DeviceStatus {
     pub status: c_uchar,
     pub ch1_datalen: c_uint,

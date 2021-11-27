@@ -110,6 +110,7 @@ fn update_data(
 
     // aggregation
     let mut data_bank: Vec<Data> = Vec::new();
+    println!("Data Length: {}", position.len());
     for d in dataset.iter() {
         match position.iter().position(|data| *data == d.0) {
             Some(index) => {
@@ -402,7 +403,7 @@ mod test {
 
         let flg1 = Arc::clone(&flag);
         let time_keeper = thread::spawn(move || {
-            continuous_read(1, 1, flg1);
+            continuous_read(0, 1, flg1);
         });
 
         let flg2 = Arc::clone(&flag);
@@ -410,7 +411,7 @@ mod test {
         let intensity_cln = Arc::clone(&intensity);
         let counter_cln = Arc::clone(&counter);
         let job_runner = thread::spawn(move || {
-            get_data(1, flg2, posi_cln, intensity_cln, counter_cln);
+            get_data(0, flg2, posi_cln, intensity_cln, counter_cln);
         });
 
         let x_cln2 = Arc::clone(&position);
