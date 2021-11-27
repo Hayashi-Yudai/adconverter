@@ -21,7 +21,7 @@ pub extern "C" fn open(id: c_short) {
     {
         let error: c_short;
         match id {
-            1 => error = 0,
+            0 => error = 0,
             _ => error = 5,
         }
         utils::parse_error(error, "TUSB0216AD_Device_Open");
@@ -63,7 +63,7 @@ pub fn start(id: c_short, ch: c_uchar, prelen: c_int, trig_type: c_uchar, trig_c
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 || ch > 2 || prelen < 0 || trig_type > 3 || trig_ch > 1 {
+        if id != 0 || ch > 2 || prelen < 0 || trig_type > 3 || trig_ch > 1 {
             error = 5;
         } else {
             error = 0;
@@ -82,7 +82,7 @@ pub fn stop(id: c_short) {
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 {
+        if id != 0 {
             error = 5;
         } else {
             error = 0;
@@ -126,7 +126,7 @@ pub fn status(verbose: bool) -> DeviceStatus {
 }
 
 pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_uint) {
-    let mut error: c_short;
+    let mut error: c_short = 0;
 
     #[cfg(feature = "release")]
     {
@@ -136,7 +136,7 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 {
+        if id != 0 {
             error = 5;
             utils::parse_error(error, "TUSB0216AD_Ad_Data");
         }
@@ -169,7 +169,7 @@ pub extern "C" fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar) {
     #[cfg(not(feature = "release"))]
     {
         error = 0;
-        if id != 1 {
+        if id != 0 {
             error = 5;
         }
 
@@ -202,7 +202,7 @@ pub fn input_set(id: c_short, type1: c_uchar, type2: c_uchar) {
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 || type1 > 6 || type2 > 6 {
+        if id != 0 || type1 > 6 || type2 > 6 {
             error = 5;
         } else {
             error = 0;
@@ -222,7 +222,7 @@ pub fn input_check(id: c_short, type1: *mut c_uchar, type2: *mut c_uchar) {
     #[cfg(not(feature = "release"))]
     {
         unsafe {
-            if id != 1 {
+            if id != 0 {
                 error = 5;
             } else {
                 error = 0;
@@ -244,7 +244,7 @@ pub fn trigger(id: c_short) {
     }
     #[cfg(not(feature = "release"))]
     {
-        if id != 1 {
+        if id != 0 {
             error = 5;
         } else {
             error = 0;
@@ -264,8 +264,8 @@ mod test {
         let mut data1 = [0; MAX_LENGTH];
         let mut data2 = [0; MAX_LENGTH];
         let l_ptr = &mut length as *mut u32;
-        takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
-        takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
+        takeout_data(0, 0, data1.as_mut_ptr(), l_ptr);
+        takeout_data(0, 1, data2.as_mut_ptr(), l_ptr);
 
         assert_eq!(length, 10000);
     }
