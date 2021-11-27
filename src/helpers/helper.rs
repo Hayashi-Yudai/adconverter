@@ -1,141 +1,55 @@
-use super::*;
 use crate::operations::interface;
+use crate::RawDataset;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
-use std::os::raw::{c_short, c_uchar, c_uint};
+use std::os::raw::{c_int, c_short, c_uint};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
-
-/// CH1, CH2 にセットされているレンジの番号を取得する
-///
-/// # Argument
-///
-/// * id - 装置のユニット番号選択スイッチの数字
-fn get_ranges(id: c_short) -> (u8, u8) {
-    let mut ch1_range: u8 = 0;
-    let mut ch2_range: u8 = 0;
-
-    let ch1_range_ptr = &mut ch1_range as *mut c_uchar;
-    let ch2_range_ptr = &mut ch2_range as *mut c_uchar;
-    interface::input_check(id, ch1_range_ptr, ch2_range_ptr);
-
-    (ch1_range, ch2_range)
-}
-
-/// レンジの番号からレンジ幅を計算
-///
-/// # Argument
-///
-/// * range - レンジの番号。例えば0なら +/- 10 V
-fn calc_range_width(range: u8) -> f32 {
-    match range {
-        0 => 20.0,
-        1 | 4 => 10.0,
-        2 | 5 => 5.0,
-        3 | 6 => 2.5,
-        _ => 0.0,
-    }
-}
-
-/// 装置から得られた１点のストレートバイナリを電圧に変換
-///
-/// # Arguments
-///
-/// * ch1_range - CH1のレンジ番号
-/// * ch2_range - CH2のレンジ番号
-/// * ch1_data - CH1から得られたストレートバイナリ形式のデータ1点
-/// * ch2_data - CH2から得られたストレートバイナリ形式のデータ1点
-///
-/// # Returns
-///
-/// CH1, CH2の出力電圧値
-pub fn convert_to_voltage(
-    ch1_range: u8,
-    ch2_range: u8,
-    ch1_data: f32,
-    ch2_data: f32,
-) -> (f32, f32) {
-    let ch1_width: f32 = calc_range_width(ch1_range);
-    let ch2_width: f32 = calc_range_width(ch2_range);
-
-    let ch1_result: f32;
-    let ch2_result: f32;
-    if ch1_range > 3 {
-        ch1_result = ch1_data * ch1_width / 2f32.powf(16.0);
-    } else {
-        ch1_result = ch1_data * ch1_width / 2f32.powf(16.0) - ch1_width / 2.0;
-    }
-
-    if ch2_range > 3 {
-        ch2_result = ch2_data * ch2_width / 2f32.powf(16.0);
-    } else {
-        ch2_result = ch2_data * ch2_width / 2f32.powf(16.0) - ch2_width / 2.0;
-    }
-
-    return (ch1_result, ch2_result);
-}
 
 /// low pass filter
 /// cutoff: 30 Hz
 /// sampling rate: 100 kHz
 /// band: 0.01
-fn lowpass(sample: Vec<f32>) -> Vec<f32> {
+fn lowpass(sample: &Vec<c_int>) -> Vec<c_int> {
     let filter = lowpass_filter(cutoff_from_frequency(3000.0, 1000_000), 0.1);
-    let sample: Vec<f64> = sample.into_iter().map(|x| x as f64).collect();
+    let sample: Vec<f64> = sample.into_iter().map(|x| *x as f64).collect();
 
     convolve(&filter, sample.as_slice())
         .into_iter()
-        .map(|x| x as f32)
+        .map(|x| x.round() as c_int)
         .collect()
 }
 
 // ステージのポジション(tmp1)ごとにデータをまとめる
 // +/-10Vとして位置測定をしていると仮定している
 fn update_data(
-    x: &Vec<f32>,
-    y: &Vec<f32>,
-    position: &mut MutexGuard<Vec<f32>>,
-    intensity: &mut MutexGuard<Vec<f32>>,
-    counter: &mut MutexGuard<Vec<u32>>,
+    x: &Vec<c_int>,
+    y: &Vec<c_int>,
+    dataset: &mut MutexGuard<Vec<RawDataset>>,
+    length: c_uint,
 ) {
-    // 10 V = 3.75 mm -> 10/10000 V = 375 nm
-    let dataset = x
-        .iter()
-        .zip(y.iter())
-        .map(|(x, y)| ((x * 10000.0).round() / 10000.0, y))
-        .collect::<Vec<_>>();
-    // dataset.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+    for i in 0..length as usize {
+        let xx = x[i];
+        let yy = y[i];
 
-    // aggregation
-    let mut data_bank: Vec<Data> = Vec::new();
-    println!("Data Length: {}", position.len());
-    for d in dataset.iter() {
-        match position.iter().position(|data| *data == d.0) {
-            Some(index) => {
-                intensity[index] = intensity[index] * counter[index] as f32 + d.1;
-                intensity[index] /= (counter[index] + 1) as f32;
-
-                counter[index] += 1;
+        match dataset.binary_search_by(|entry| entry.x.cmp(&xx)) {
+            Ok(idx) => {
+                let length = dataset[idx].len as i32;
+                dataset[idx].y = (dataset[idx].y * length + yy) / (length + 1);
             }
-            None => {
-                position.push(d.0);
-                intensity.push(*d.1);
-                counter.push(1);
+            Err(_) => {
+                dataset.push(RawDataset {
+                    x: xx,
+                    y: yy,
+                    len: 1,
+                });
             }
         }
     }
 
-    for idx in 0..position.len() {
-        data_bank.push(Data::new(position[idx], intensity[idx], counter[idx]));
-    }
-    data_bank.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-    for idx in 0..position.len() {
-        position[idx] = data_bank[idx].x;
-        intensity[idx] = data_bank[idx].y;
-        counter[idx] = data_bank[idx].len;
-    }
+    dataset.sort_by(|a, b| a.x.cmp(&b.x));
 }
 
 /// 装置の連続データ取り込みの制御。指定の時間だけデータ取り込みを行う
@@ -148,7 +62,6 @@ fn update_data(
 /// * seconds - データ取り込みを行う秒数
 /// * flag - データ取り込み中であるかを判別するフラグ
 pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
-    println!("Timer start!");
     let sleeping_time = time::Duration::from_secs(seconds);
 
     // CH1, 2ともに+/-10Vの入力を受け付ける
@@ -176,14 +89,8 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
 /// * flag - データ取り込み中であるかを判別するフラグ
 /// * position - CH1のデータを収納するベクトル
 /// * intensity - CH2のデータを収納するベクトル
-pub fn get_data(
-    id: c_short,
-    flag: Arc<Mutex<i8>>,
-    position: Arc<Mutex<Vec<f32>>>,
-    intensity: Arc<Mutex<Vec<f32>>>,
-    counter: Arc<Mutex<Vec<u32>>>,
-) {
-    let ranges: (u8, u8) = get_ranges(id);
+pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDataset>>>) {
+    // let ranges: (u8, u8) = get_ranges(id);
     // const MAX_LENGTH: usize = 262142;
     const MAX_LENGTH: usize = 100000;
     let mut length: c_uint;
@@ -196,14 +103,17 @@ pub fn get_data(
         thread::sleep(time::Duration::from_millis(1));
     }
 
-    let mut data1 = [0; MAX_LENGTH];
-    let mut data2 = [0; MAX_LENGTH];
+    // let mut data1: Vec<c_int> = Vec::with_capacity(MAX_LENGTH);
+    // let mut data2: Vec<c_int> = Vec::with_capacity(MAX_LENGTH);
+    let mut data1: Vec<c_int> = vec![0; MAX_LENGTH];
+    let mut data2: Vec<c_int> = vec![0; MAX_LENGTH];
 
     loop {
         if *flag.lock().unwrap() == 1 {
             break;
         }
         let device_status = interface::status(false);
+        println!("Retreiving");
 
         if device_status.status == 3 {
             length = min(device_status.ch1_datalen, device_status.ch2_datalen);
@@ -214,39 +124,12 @@ pub fn get_data(
             continue;
         }
 
-        // データの変換
-        // data1, 2には0000 ~ FFFFの16bitsストレートバイナリが入っている
-        // 設定しているレンジに応じて電圧に変換する
-        let mut tmp1 = vec![0.0; length as usize];
-        let mut tmp2 = vec![0.0; length as usize];
-        for i in 0..length as usize {
-            let result = convert_to_voltage(
-                ranges.0,
-                ranges.1,
-                data1[i as usize] as f32,
-                data2[i as usize] as f32,
-            );
-            tmp1[i as usize] = result.0; // position
-            tmp2[i as usize] = result.1; // signal
-        }
+        let mut position_denoised: Vec<c_int> = lowpass(&data1);
+        position_denoised.shrink_to_fit();
+        data2.shrink_to_fit();
 
-        let position_denoised = lowpass(tmp1);
-
-        // position, intensity に値を入れる
-        let mut position = position
-            .lock()
-            .expect("Failed to lock position: job_runner");
-        let mut intensity = intensity
-            .lock()
-            .expect("Failed to lock intensity: job_runner");
-        let mut counter = counter.lock().expect("Failed to lock counter: job_runner");
-        update_data(
-            &position_denoised,
-            &tmp2,
-            &mut position,
-            &mut intensity,
-            &mut counter,
-        );
+        let mut dataset = dataset.lock().unwrap();
+        update_data(&position_denoised, &data2, &mut dataset, length);
     }
     println!("Data acquisition stopped");
 }
