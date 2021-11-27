@@ -1,4 +1,5 @@
-use crate::helpers::operation::*;
+use super::*;
+use crate::operations::interface;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
@@ -6,44 +7,6 @@ use std::os::raw::{c_short, c_uchar, c_uint};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
-
-/// エラーコードからエラーの詳細を表示する
-/// # Arguments
-///
-/// * e - エラーコード
-/// * func_name - エラーの発生元のメソッド名
-pub fn parse_error(e: i16, func_name: &str) {
-    match e {
-        0 => {}
-        1 => println!("{}: Invalid ID", func_name),
-        2 => println!("{}: Invalid Driver", func_name),
-        3 => println!("{}: Device already opened", func_name),
-        4 => println!("{}: Too many devices", func_name),
-        5 => println!("{}: Failed to open device", func_name),
-        6 => println!("{}: Device not found", func_name),
-        8 => println!("{}: Parameters are invalid", func_name),
-        9 => println!("{}: USB connection error", func_name),
-        11 => println!("{}: Sequential reading", func_name),
-        99 => println!("{}: Other error", func_name),
-        _ => println!("{}: Other error", func_name),
-    }
-}
-
-struct Data {
-    x: f32,
-    y: f32,
-    len: u32,
-}
-
-impl Data {
-    fn new(x: f32, y: f32, len: u32) -> Self {
-        Data {
-            x: x,
-            y: y,
-            len: len,
-        }
-    }
-}
 
 /// CH1, CH2 にセットされているレンジの番号を取得する
 ///
@@ -56,7 +19,7 @@ fn get_ranges(id: c_short) -> (u8, u8) {
 
     let ch1_range_ptr = &mut ch1_range as *mut c_uchar;
     let ch2_range_ptr = &mut ch2_range as *mut c_uchar;
-    input_check(id, ch1_range_ptr, ch2_range_ptr);
+    interface::input_check(id, ch1_range_ptr, ch2_range_ptr);
 
     (ch1_range, ch2_range)
 }
@@ -131,13 +94,13 @@ fn lowpass(sample: Vec<f32>) -> Vec<f32> {
 // ステージのポジション(tmp1)ごとにデータをまとめる
 // +/-10Vとして位置測定をしていると仮定している
 fn update_data(
-    x: Vec<f32>,
-    y: Vec<f32>,
+    x: &Vec<f32>,
+    y: &Vec<f32>,
     position: &mut MutexGuard<Vec<f32>>,
     intensity: &mut MutexGuard<Vec<f32>>,
     counter: &mut MutexGuard<Vec<u32>>,
 ) {
-    // 10 V = 3.75 μm -> 10/10000 V = 375 nm
+    // 10 V = 3.75 mm -> 10/10000 V = 375 nm
     let dataset = x
         .iter()
         .zip(y.iter())
@@ -189,15 +152,15 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
 
     // CH1, 2ともに+/-10Vの入力を受け付ける
     // 入力が+/-10VなのはSR830の仕様
-    input_set(id, 0, 0);
-    set_clock(id, 500, 0);
-    start(id, 2, 0, 0, 0);
-    trigger(id);
+    interface::input_set(id, 0, 0);
+    interface::set_clock(id, 500, 0);
+    interface::start(id, 2, 0, 0, 0);
+    interface::trigger(id);
 
     *flag.lock().unwrap() = 0; // 計測開始のフラグを立てる
     thread::sleep(sleeping_time);
 
-    stop(id);
+    interface::stop(id);
 
     *flag.lock().unwrap() = 1; // 計測終了のフラグを立てる
     println!("Timer stopped");
@@ -239,13 +202,13 @@ pub fn get_data(
         if *flag.lock().unwrap() == 1 {
             break;
         }
-        let device_status = status(false);
+        let device_status = interface::status(false);
 
         if device_status.status == 3 {
             length = min(device_status.ch1_datalen, device_status.ch2_datalen);
             let l_ptr = &mut length as *mut u32;
-            takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
-            takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
+            interface::takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
+            interface::takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
         } else {
             continue;
         }
@@ -269,12 +232,16 @@ pub fn get_data(
         let position_denoised = lowpass(tmp1);
 
         // position, intensity に値を入れる
-        let mut position = position.lock().unwrap();
-        let mut intensity = intensity.lock().unwrap();
-        let mut counter = counter.lock().unwrap();
+        let mut position = position
+            .lock()
+            .expect("Failed to lock position: job_runner");
+        let mut intensity = intensity
+            .lock()
+            .expect("Failed to lock intensity: job_runner");
+        let mut counter = counter.lock().expect("Failed to lock counter: job_runner");
         update_data(
-            position_denoised,
-            tmp2,
+            &position_denoised,
+            &tmp2,
             &mut position,
             &mut intensity,
             &mut counter,
@@ -393,8 +360,8 @@ mod test {
         let counter = Mutex::new(vec![1, 2, 1]);
 
         update_data(
-            x,
-            y,
+            &x,
+            &y,
             &mut position.lock().unwrap(),
             &mut intensity.lock().unwrap(),
             &mut counter.lock().unwrap(),
@@ -458,18 +425,5 @@ mod test {
         post_data.join().unwrap();
 
         assert_eq!(*Arc::clone(&flag).lock().unwrap(), 1);
-    }
-
-    #[test]
-    fn test_ad_data_mock() {
-        const MAX_LENGTH: usize = 100000;
-        let mut length = MAX_LENGTH as u32;
-        let mut data1 = [0; MAX_LENGTH];
-        let mut data2 = [0; MAX_LENGTH];
-        let l_ptr = &mut length as *mut u32;
-        takeout_data(1, 0, data1.as_mut_ptr(), l_ptr);
-        takeout_data(1, 1, data2.as_mut_ptr(), l_ptr);
-
-        assert_eq!(length, 10000);
     }
 }
