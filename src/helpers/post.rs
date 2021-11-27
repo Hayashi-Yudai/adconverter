@@ -151,7 +151,7 @@ pub fn post_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDa
 
 #[cfg(test)]
 mod test {
-    // use super::*;
+    use super::*;
     use dotenv::dotenv;
     use std::env;
 
@@ -163,5 +163,51 @@ mod test {
         let url = env::var("DATA_POST_URL").expect("DATA_POST_URL is not set");
 
         assert_eq!(&url, "http://localhost:8000/core/rapid-scan-data/");
+    }
+
+    #[test]
+    fn test_converting_voltage() {
+        let ch1_range = 0;
+        let ch2_range = 0;
+        let ch1_data = 1000.0;
+        let ch2_data = 500.0;
+
+        let result = convert_to_voltage(ch1_range, ch2_range, ch1_data, ch2_data);
+
+        assert_eq!(result.0, ch1_data * 20.0 / 2f32.powf(16.0) - 10.0);
+        assert_eq!(result.1, ch2_data * 20.0 / 2f32.powf(16.0) - 10.0);
+    }
+
+    #[test]
+    fn test_get_range() {
+        let range = get_ranges(2);
+
+        assert_eq!(range.0, 0);
+        assert_eq!(range.1, 0);
+    }
+
+    /// 0: +/-10V, 1: +/-5V, 2: +/-2.5V, 3: +/-1.25V, 4: 10V, 5: 5V, 6: 2.5V
+    #[test]
+    fn test_calc_width() {
+        let width = calc_range_width(0); // +/-10 V
+        assert_eq!(width, 20.0);
+
+        let width = calc_range_width(1); // +/-5 V
+        assert_eq!(width, 10.0);
+
+        let width = calc_range_width(2); // +/-2.5 V
+        assert_eq!(width, 5.0);
+
+        let width = calc_range_width(3); // +/-1.25 V
+        assert_eq!(width, 2.5);
+
+        let width = calc_range_width(4); // 10 V
+        assert_eq!(width, 10.0);
+
+        let width = calc_range_width(5); // 5 V
+        assert_eq!(width, 5.0);
+
+        let width = calc_range_width(6); // 2.5 V
+        assert_eq!(width, 2.5);
     }
 }
