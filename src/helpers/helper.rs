@@ -41,17 +41,18 @@ fn update_data(
                     ((dataset[idx].y * length + yy) as f32 / (length + 1) as f32).round() as i32;
                 dataset[idx].len += 1;
             }
-            Err(_) => {
-                dataset.push(RawDataset {
-                    x: xx,
-                    y: yy,
-                    len: 1,
-                });
+            Err(idx) => {
+                dataset.insert(
+                    idx,
+                    RawDataset {
+                        x: xx,
+                        y: yy,
+                        len: 1,
+                    },
+                );
             }
         }
     }
-
-    dataset.sort_by(|a, b| a.x.cmp(&b.x));
 }
 
 /// 装置の連続データ取り込みの制御。指定の時間だけデータ取り込みを行う
