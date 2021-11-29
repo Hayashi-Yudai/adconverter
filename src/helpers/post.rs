@@ -69,16 +69,17 @@ pub fn convert_to_voltage(
 
     let ch1_result: f32;
     let ch2_result: f32;
+    let max_val = 2f32.powf(16.0) - 1.0;
     if ch1_range > 3 {
-        ch1_result = ch1_data * ch1_width / 2f32.powf(16.0);
+        ch1_result = ch1_data * ch1_width / max_val;
     } else {
-        ch1_result = ch1_data * ch1_width / 2f32.powf(16.0) - ch1_width / 2.0;
+        ch1_result = ch1_data * ch1_width / max_val - ch1_width / 2.0;
     }
 
     if ch2_range > 3 {
-        ch2_result = ch2_data * ch2_width / 2f32.powf(16.0);
+        ch2_result = ch2_data * ch2_width / max_val;
     } else {
-        ch2_result = ch2_data * ch2_width / 2f32.powf(16.0) - ch2_width / 2.0;
+        ch2_result = ch2_data * ch2_width / max_val - ch2_width / 2.0;
     }
 
     return (ch1_result, ch2_result);
@@ -167,15 +168,33 @@ mod test {
 
     #[test]
     fn test_converting_voltage() {
-        let ch1_range = 0;
-        let ch2_range = 0;
-        let ch1_data = 1000.0;
-        let ch2_data = 500.0;
+        let res1 = convert_to_voltage(0, 0, 0.0, 65535.0); // 65535 = FFFF
+        assert_eq!(res1.0, -10.0);
+        assert_eq!(res1.1, 10.0);
 
-        let result = convert_to_voltage(ch1_range, ch2_range, ch1_data, ch2_data);
+        let res2 = convert_to_voltage(1, 1, 0.0, 65535.0);
+        assert_eq!(res2.0, -5.0);
+        assert_eq!(res2.1, 5.0);
 
-        assert_eq!(result.0, ch1_data * 20.0 / 2f32.powf(16.0) - 10.0);
-        assert_eq!(result.1, ch2_data * 20.0 / 2f32.powf(16.0) - 10.0);
+        let res3 = convert_to_voltage(2, 2, 0.0, 65535.0);
+        assert_eq!(res3.0, -2.5);
+        assert_eq!(res3.1, 2.5);
+
+        let res4 = convert_to_voltage(3, 3, 0.0, 65535.0);
+        assert_eq!(res4.0, -1.25);
+        assert_eq!(res4.1, 1.25);
+
+        let res5 = convert_to_voltage(4, 4, 0.0, 65535.0);
+        assert_eq!(res5.0, 0.0);
+        assert_eq!(res5.1, 10.0);
+
+        let res6 = convert_to_voltage(5, 5, 0.0, 65535.0);
+        assert_eq!(res6.0, 0.0);
+        assert_eq!(res6.1, 5.0);
+
+        let res7 = convert_to_voltage(6, 6, 0.0, 65535.0);
+        assert_eq!(res7.0, 0.0);
+        assert_eq!(res7.1, 2.5);
     }
 
     #[test]
