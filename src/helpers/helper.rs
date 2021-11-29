@@ -93,9 +93,7 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
 /// * position - CH1のデータを収納するベクトル
 /// * intensity - CH2のデータを収納するベクトル
 pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDataset>>>) {
-    // let ranges: (u8, u8) = get_ranges(id);
-    // const MAX_LENGTH: usize = 262142;
-    const MAX_LENGTH: usize = 100000;
+    const MAX_LENGTH: usize = 262142;
     let mut length: c_uint;
 
     println!("Data acquisition started");
@@ -106,8 +104,6 @@ pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDat
         thread::sleep(time::Duration::from_millis(1));
     }
 
-    // let mut data1: Vec<c_int> = Vec::with_capacity(MAX_LENGTH);
-    // let mut data2: Vec<c_int> = Vec::with_capacity(MAX_LENGTH);
     let mut data1: Vec<c_int> = vec![0; MAX_LENGTH];
     let mut data2: Vec<c_int> = vec![0; MAX_LENGTH];
 
@@ -126,9 +122,7 @@ pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDat
             continue;
         }
 
-        let mut position_denoised: Vec<c_int> = lowpass(&data1);
-        position_denoised.shrink_to_fit();
-        data2.shrink_to_fit();
+        let position_denoised: Vec<c_int> = lowpass(&data1);
 
         let mut dataset = dataset.lock().unwrap();
         update_data(&position_denoised, &data2, &mut dataset, length);
@@ -190,8 +184,8 @@ mod test {
 
     #[test]
     fn test_update_data() {
-        let x = vec![0, 1, 2, 3, 4];
-        let y = vec![0, 1, 4, 9, 16];
+        let x = vec![3, 0, 1, 4, 2];
+        let y = vec![9, 0, 1, 16, 4];
         let mut dataset = Mutex::new(vec![
             RawDataset { x: 0, y: 0, len: 1 },
             RawDataset { x: 2, y: 5, len: 2 },
