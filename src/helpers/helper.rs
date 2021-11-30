@@ -139,7 +139,13 @@ pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDat
             continue;
         }
 
-        // let position_denoised: Vec<c_int> = lowpass(&data1);
+        for i in 0..length as usize{
+            data1[i] = data1[i] - 65535 / 2;
+        }
+        let position_denoised: Vec<c_int> = lowpass(&data1);
+        for i in 0..length as usize{
+            data1[i] = data1[i] + 65535 / 2;
+        }
 
         let mut dataset = dataset.lock().unwrap();
         // update_data(&position_denoised, &data2, &mut dataset, length);
