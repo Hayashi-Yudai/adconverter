@@ -8,9 +8,29 @@ extern crate serde_json;
 use dotenv::dotenv;
 use helpers::{helper, post};
 use operations::interface;
+use std::cmp::Ordering;
 use std::os::raw::{c_int, c_short, c_uint};
 use std::sync::{Arc, Mutex};
 use std::thread;
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct RawDataset {
+    x: i32,
+    y: i32,
+    len: u32,
+}
+
+impl Ord for RawDataset {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.x.cmp(&self.x)
+    }
+}
+
+impl PartialOrd for RawDataset {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn run(id: c_short, seconds: u64) {
@@ -28,22 +48,17 @@ pub extern "C" fn run(id: c_short, seconds: u64) {
     });
 
     let flg2 = Arc::clone(&flag);
-    let x = Arc::new(Mutex::new(Vec::<f32>::with_capacity(DATA_SIZE)));
-    let y = Arc::new(Mutex::new(Vec::<f32>::with_capacity(DATA_SIZE)));
-    let counter = Arc::new(Mutex::new(Vec::<u32>::with_capacity(DATA_SIZE)));
+    let data = Arc::new(Mutex::new(Vec::<RawDataset>::with_capacity(DATA_SIZE)));
 
-    let x_cln = Arc::clone(&x);
-    let y_cln = Arc::clone(&y);
-    let counter_cln = Arc::clone(&counter);
+    let data_cln = Arc::clone(&data);
     let job_runner = thread::spawn(move || {
-        helper::get_data(id, flg2, x_cln, y_cln, counter_cln);
+        helper::get_data(id, flg2, data_cln);
     });
 
-    let x_cln2 = Arc::clone(&x);
-    let y_cln2 = Arc::clone(&y);
+    let data_cln2 = Arc::clone(&data);
     let flg3 = Arc::clone(&flag);
     let post_data = thread::spawn(move || {
-        let _ = post::post_data(flg3, x_cln2, y_cln2);
+        let _ = post::post_data(id, flg3, data_cln2);
     });
 
     time_keeper.join().expect("Paniced at time_keeper");
@@ -84,7 +99,7 @@ pub extern "C" fn test_run() {
 
     let mut a: Vec<f32> = vec![];
     for i in 0..store.len() as usize {
-        let result = helper::convert_to_voltage(0, 0, store[i] as f32, store[i] as f32);
+        let result = post::convert_to_voltage(0, 0, store[i] as f32, store[i] as f32);
         a.push(result.0);
     }
     helper::write_to_csv("C:/Users/yudai/Desktop/a.csv", &a, &a);

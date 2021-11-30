@@ -2,7 +2,7 @@
 authors = ["Yudai Hayashi <34836226+Hayashi-Yudai@users.noreply.github.com>"]
 edition = "2018"
 name = "adconverter"
-version = "0.1.0"
+version = "0.2.0"
 
 [features]
 release = []
@@ -16,6 +16,8 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 rand = "*"
+signalo_filters = "*"
+signalo_traits = "*"
 
 [dev-dependencies]
 nearly_eq = "*"

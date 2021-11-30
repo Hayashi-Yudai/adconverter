@@ -1,140 +1,71 @@
-use super::*;
 use crate::operations::interface;
+use crate::RawDataset;
+use signalo_filters::convolve::savitzky_golay::SavitzkyGolay;
+use signalo_filters::convolve::*;
+use signalo_filters::signalo_traits::Filter;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
-use std::os::raw::{c_short, c_uchar, c_uint};
+use std::os::raw::{c_int, c_short, c_uint};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{thread, time};
 use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
-
-/// CH1, CH2 にセットされているレンジの番号を取得する
-///
-/// # Argument
-///
-/// * id - 装置のユニット番号選択スイッチの数字
-fn get_ranges(id: c_short) -> (u8, u8) {
-    let mut ch1_range: u8 = 0;
-    let mut ch2_range: u8 = 0;
-
-    let ch1_range_ptr = &mut ch1_range as *mut c_uchar;
-    let ch2_range_ptr = &mut ch2_range as *mut c_uchar;
-    interface::input_check(id, ch1_range_ptr, ch2_range_ptr);
-
-    (ch1_range, ch2_range)
-}
-
-/// レンジの番号からレンジ幅を計算
-///
-/// # Argument
-///
-/// * range - レンジの番号。例えば0なら +/- 10 V
-fn calc_range_width(range: u8) -> f32 {
-    match range {
-        0 => 20.0,
-        1 | 4 => 10.0,
-        2 | 5 => 5.0,
-        3 | 6 => 2.5,
-        _ => 0.0,
-    }
-}
-
-/// 装置から得られた１点のストレートバイナリを電圧に変換
-///
-/// # Arguments
-///
-/// * ch1_range - CH1のレンジ番号
-/// * ch2_range - CH2のレンジ番号
-/// * ch1_data - CH1から得られたストレートバイナリ形式のデータ1点
-/// * ch2_data - CH2から得られたストレートバイナリ形式のデータ1点
-///
-/// # Returns
-///
-/// CH1, CH2の出力電圧値
-pub fn convert_to_voltage(
-    ch1_range: u8,
-    ch2_range: u8,
-    ch1_data: f32,
-    ch2_data: f32,
-) -> (f32, f32) {
-    let ch1_width: f32 = calc_range_width(ch1_range);
-    let ch2_width: f32 = calc_range_width(ch2_range);
-
-    let ch1_result: f32;
-    let ch2_result: f32;
-    if ch1_range > 3 {
-        ch1_result = ch1_data * ch1_width / 2f32.powf(16.0);
-    } else {
-        ch1_result = ch1_data * ch1_width / 2f32.powf(16.0) - ch1_width / 2.0;
-    }
-
-    if ch2_range > 3 {
-        ch2_result = ch2_data * ch2_width / 2f32.powf(16.0);
-    } else {
-        ch2_result = ch2_data * ch2_width / 2f32.powf(16.0) - ch2_width / 2.0;
-    }
-
-    return (ch1_result, ch2_result);
-}
 
 /// low pass filter
 /// cutoff: 30 Hz
 /// sampling rate: 100 kHz
 /// band: 0.01
-fn lowpass(sample: Vec<f32>) -> Vec<f32> {
+#[allow(dead_code)]
+fn lowpass(sample: &Vec<c_int>) -> Vec<c_int> {
     let filter = lowpass_filter(cutoff_from_frequency(3000.0, 1000_000), 0.1);
-    let sample: Vec<f64> = sample.into_iter().map(|x| x as f64).collect();
+    let sample: Vec<f64> = sample.into_iter().map(|x| *x as f64).collect();
 
     convolve(&filter, sample.as_slice())
         .into_iter()
-        .map(|x| x as f32)
+        .map(|x| x.round() as c_int)
+        .collect()
+}
+
+#[allow(dead_code)]
+fn savitzky_golay(sample: &Vec<c_int>) -> Vec<c_int> {
+    let filter: Convolve<f64, 5> = Convolve::savitzky_golay();
+    sample
+        .iter()
+        .scan(filter, |filter, &input| Some(filter.filter(input as f64)))
+        .map(|x| x.round() as c_int)
         .collect()
 }
 
 // ステージのポジション(tmp1)ごとにデータをまとめる
 // +/-10Vとして位置測定をしていると仮定している
 fn update_data(
-    x: &Vec<f32>,
-    y: &Vec<f32>,
-    position: &mut MutexGuard<Vec<f32>>,
-    intensity: &mut MutexGuard<Vec<f32>>,
-    counter: &mut MutexGuard<Vec<u32>>,
+    x: &Vec<c_int>,
+    y: &Vec<c_int>,
+    dataset: &mut MutexGuard<Vec<RawDataset>>,
+    length: c_uint,
 ) {
-    // 10 V = 3.75 mm -> 10/10000 V = 375 nm
-    let dataset = x
-        .iter()
-        .zip(y.iter())
-        .map(|(x, y)| ((x * 10000.0).round() / 10000.0, y))
-        .collect::<Vec<_>>();
-    // dataset.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+    for i in 0..length as usize {
+        let xx = x[i];
+        let yy = y[i];
 
-    // aggregation
-    let mut data_bank: Vec<Data> = Vec::new();
-    println!("Data Length: {}", position.len());
-    for d in dataset.iter() {
-        match position.iter().position(|data| *data == d.0) {
-            Some(index) => {
-                intensity[index] = intensity[index] * counter[index] as f32 + d.1;
-                intensity[index] /= (counter[index] + 1) as f32;
-
-                counter[index] += 1;
+        match dataset.binary_search_by(|entry| entry.x.cmp(&xx)) {
+            Ok(idx) => {
+                let length = dataset[idx].len as i32;
+                dataset[idx].y =
+                    ((dataset[idx].y * length + yy) as f32 / (length + 1) as f32).round() as i32;
+                dataset[idx].len += 1;
             }
-            None => {
-                position.push(d.0);
-                intensity.push(*d.1);
-                counter.push(1);
+            Err(idx) => {
+                dataset.insert(
+                    idx,
+                    RawDataset {
+                        x: xx,
+                        y: yy,
+                        len: 1,
+                    },
+                );
             }
         }
-    }
-
-    for idx in 0..position.len() {
-        data_bank.push(Data::new(position[idx], intensity[idx], counter[idx]));
-    }
-    data_bank.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-    for idx in 0..position.len() {
-        position[idx] = data_bank[idx].x;
-        intensity[idx] = data_bank[idx].y;
-        counter[idx] = data_bank[idx].len;
     }
 }
 
@@ -148,7 +79,6 @@ fn update_data(
 /// * seconds - データ取り込みを行う秒数
 /// * flag - データ取り込み中であるかを判別するフラグ
 pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
-    println!("Timer start!");
     let sleeping_time = time::Duration::from_secs(seconds);
 
     // CH1, 2ともに+/-10Vの入力を受け付ける
@@ -167,6 +97,21 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
     println!("Timer stopped");
 }
 
+fn cleanup_buffer(id: c_short) {
+    const MAX_LENGTH: usize = 262142;
+    let mut data1: Vec<c_int> = vec![0; MAX_LENGTH];
+    let mut data2: Vec<c_int> = vec![0; MAX_LENGTH];
+
+    let device_status = interface::status(false);
+
+    if device_status.status == 3 {
+        let mut length = min(device_status.ch1_datalen, device_status.ch2_datalen);
+        let l_ptr = &mut length as *mut u32;
+        interface::takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
+        interface::takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
+    }
+}
+
 /// データの取り込みが行われているフラグが立っている間
 /// CH1, CH2 からのデータを取得する
 ///
@@ -176,17 +121,11 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
 /// * flag - データ取り込み中であるかを判別するフラグ
 /// * position - CH1のデータを収納するベクトル
 /// * intensity - CH2のデータを収納するベクトル
-pub fn get_data(
-    id: c_short,
-    flag: Arc<Mutex<i8>>,
-    position: Arc<Mutex<Vec<f32>>>,
-    intensity: Arc<Mutex<Vec<f32>>>,
-    counter: Arc<Mutex<Vec<u32>>>,
-) {
-    let ranges: (u8, u8) = get_ranges(id);
-    // const MAX_LENGTH: usize = 262142;
-    const MAX_LENGTH: usize = 100000;
+pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDataset>>>) {
+    const MAX_LENGTH: usize = 262142;
     let mut length: c_uint;
+
+    cleanup_buffer(id);
 
     println!("Data acquisition started");
     loop {
@@ -196,8 +135,8 @@ pub fn get_data(
         thread::sleep(time::Duration::from_millis(1));
     }
 
-    let mut data1 = [0; MAX_LENGTH];
-    let mut data2 = [0; MAX_LENGTH];
+    let mut data1: Vec<c_int> = vec![0; MAX_LENGTH];
+    let mut data2: Vec<c_int> = vec![0; MAX_LENGTH];
 
     loop {
         if *flag.lock().unwrap() == 1 {
@@ -214,39 +153,11 @@ pub fn get_data(
             continue;
         }
 
-        // データの変換
-        // data1, 2には0000 ~ FFFFの16bitsストレートバイナリが入っている
-        // 設定しているレンジに応じて電圧に変換する
-        let mut tmp1 = vec![0.0; length as usize];
-        let mut tmp2 = vec![0.0; length as usize];
-        for i in 0..length as usize {
-            let result = convert_to_voltage(
-                ranges.0,
-                ranges.1,
-                data1[i as usize] as f32,
-                data2[i as usize] as f32,
-            );
-            tmp1[i as usize] = result.0; // position
-            tmp2[i as usize] = result.1; // signal
-        }
+        // let position_denoised: Vec<c_int> = lowpass(&data1);
+        let position_denoised: Vec<c_int> = savitzky_golay(&data1);
 
-        let position_denoised = lowpass(tmp1);
-
-        // position, intensity に値を入れる
-        let mut position = position
-            .lock()
-            .expect("Failed to lock position: job_runner");
-        let mut intensity = intensity
-            .lock()
-            .expect("Failed to lock intensity: job_runner");
-        let mut counter = counter.lock().expect("Failed to lock counter: job_runner");
-        update_data(
-            &position_denoised,
-            &tmp2,
-            &mut position,
-            &mut intensity,
-            &mut counter,
-        );
+        let mut dataset = dataset.lock().unwrap();
+        update_data(&position_denoised, &data2, &mut dataset, length);
     }
     println!("Data acquisition stopped");
 }
@@ -264,120 +175,68 @@ pub fn write_to_csv(file_name: &str, x: &Vec<f32>, y: &Vec<f32>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::helpers::post;
-    use dotenv::dotenv;
     use nearly_eq::*;
     use rand::Rng;
     use std::f64::consts::PI;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use std::thread;
     use std::time::Instant;
-
-    #[test]
-    fn test_get_range() {
-        let range = get_ranges(2);
-
-        assert_eq!(range.0, 0);
-        assert_eq!(range.1, 0);
-    }
-
-    /// 0: +/-10V, 1: +/-5V, 2: +/-2.5V, 3: +/-1.25V, 4: 10V, 5: 5V, 6: 2.5V
-    #[test]
-    fn test_calc_width() {
-        let width = calc_range_width(0); // +/-10 V
-        assert_eq!(width, 20.0);
-
-        let width = calc_range_width(1); // +/-5 V
-        assert_eq!(width, 10.0);
-
-        let width = calc_range_width(2); // +/-2.5 V
-        assert_eq!(width, 5.0);
-
-        let width = calc_range_width(3); // +/-1.25 V
-        assert_eq!(width, 2.5);
-
-        let width = calc_range_width(4); // 10 V
-        assert_eq!(width, 10.0);
-
-        let width = calc_range_width(5); // 5 V
-        assert_eq!(width, 5.0);
-
-        let width = calc_range_width(6); // 2.5 V
-        assert_eq!(width, 2.5);
-    }
-
-    #[test]
-    fn test_converting_voltage() {
-        let ch1_range = 0;
-        let ch2_range = 0;
-        let ch1_data = 1000.0;
-        let ch2_data = 500.0;
-
-        let result = convert_to_voltage(ch1_range, ch2_range, ch1_data, ch2_data);
-
-        assert_eq!(result.0, ch1_data * 20.0 / 2f32.powf(16.0) - 10.0);
-        assert_eq!(result.1, ch2_data * 20.0 / 2f32.powf(16.0) - 10.0);
-    }
 
     #[test]
     fn test_lowpass() {
         const DATA_NUM: usize = 10000; // 0.1 sec
-        let mut x = vec![0.0];
-        let mut y = vec![0.0; DATA_NUM];
+        let mut x = vec![0];
+        let mut y = vec![0; DATA_NUM];
         let mut rng = rand::thread_rng();
 
         for i in 1..DATA_NUM {
-            x.push(i as f32);
+            x.push(i as i32);
         }
 
         // 1 data point = 10 micro-sec
         // 1 cycle = 0.05 sec = 5000 data points
         // y = sin(2e-4 * x)
         for i in 0..DATA_NUM {
-            y[i] = (x[i] * 2e-4 * 2.0 * PI as f32).sin();
+            y[i] = (1000.0 * (x[i] as f32 * 2e-4 * 2.0 * PI as f32).sin()) as i32;
         }
 
         let mut y_noise = y.clone();
         for i in 0..DATA_NUM {
             let noise: f32 = rng.gen();
-            y_noise[i] = y[i] + 2.0 * 5e-3 * (noise - 0.5);
+            y_noise[i] = y[i] + (2000.0 * 5e-3 * (noise - 0.5)) as i32;
         }
 
-        let denoised = lowpass(y_noise);
+        let denoised = lowpass(&y_noise);
         println!("{}", denoised.len());
 
         for i in 5..(DATA_NUM - 5) {
-            assert_nearly_eq!(y[i], denoised[i], 0.003);
+            assert_nearly_eq!(y[i], denoised[i], 4);
         }
     }
 
     #[test]
     fn test_update_data() {
-        let x = vec![0.0, 1.0, 2.0, 3.0, 4.0];
-        let y = vec![0.0, 1.0, 4.0, 9.0, 16.0];
-        let position = Mutex::new(vec![0.0, 2.0, 4.0]);
-        let intensity = Mutex::new(vec![0.01, 4.5, 15.8]);
-        let counter = Mutex::new(vec![1, 2, 1]);
+        let x = vec![3, 0, 1, 4, 2];
+        let y = vec![9, 0, 1, 16, 4];
+        let mut dataset = Mutex::new(vec![
+            RawDataset { x: 0, y: 0, len: 1 },
+            RawDataset { x: 2, y: 5, len: 2 },
+            RawDataset {
+                x: 4,
+                y: 16,
+                len: 1,
+            },
+        ]);
 
-        update_data(
-            &x,
-            &y,
-            &mut position.lock().unwrap(),
-            &mut intensity.lock().unwrap(),
-            &mut counter.lock().unwrap(),
-        );
+        update_data(&x, &y, &mut dataset.lock().unwrap(), 5);
 
-        let position = position.lock().unwrap();
-        let intensity = intensity.lock().unwrap();
-        let counter = counter.lock().unwrap();
-        let xx = vec![0.0, 1.0, 2.0, 3.0, 4.0];
-        let yy = vec![0.005, 1.0, 13.0 / 3.0, 9.0, 15.9];
-        let cc = vec![2, 1, 3, 1, 2];
+        let dataset = dataset.lock().unwrap();
+        let correct_ys = [0, 1, 5, 9, 16];
+        let correct_lens = [2, 1, 3, 1, 2];
         for i in 0..5 {
-            assert_eq!(position[i], xx[i]);
-            assert_eq!(intensity[i], yy[i]);
-            assert_eq!(counter[i], cc[i]);
+            assert_eq!(dataset[i].x, i as i32);
+            assert_eq!(dataset[i].y, correct_ys[i]);
+            assert_eq!(dataset[i].len, correct_lens[i]);
         }
     }
 
@@ -389,42 +248,5 @@ mod test {
         let end = start.elapsed();
 
         assert_nearly_eq!(end.as_millis() as f32, (seconds * 1000) as f32, 50.0);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_get_data() {
-        dotenv().ok();
-
-        let position: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
-        let intensity: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
-        let counter: Arc<Mutex<Vec<u32>>> = Arc::new(Mutex::new(Vec::new()));
-        let flag = Arc::new(Mutex::new(-1));
-
-        let flg1 = Arc::clone(&flag);
-        let time_keeper = thread::spawn(move || {
-            continuous_read(0, 1, flg1);
-        });
-
-        let flg2 = Arc::clone(&flag);
-        let posi_cln = Arc::clone(&position);
-        let intensity_cln = Arc::clone(&intensity);
-        let counter_cln = Arc::clone(&counter);
-        let job_runner = thread::spawn(move || {
-            get_data(0, flg2, posi_cln, intensity_cln, counter_cln);
-        });
-
-        let x_cln2 = Arc::clone(&position);
-        let y_cln2 = Arc::clone(&intensity);
-        let flg3 = Arc::clone(&flag);
-        let post_data = thread::spawn(move || {
-            let _ = post::post_data(flg3, x_cln2, y_cln2);
-        });
-
-        time_keeper.join().unwrap();
-        job_runner.join().unwrap();
-        post_data.join().unwrap();
-
-        assert_eq!(*Arc::clone(&flag).lock().unwrap(), 1);
     }
 }
