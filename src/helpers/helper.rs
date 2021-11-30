@@ -83,6 +83,21 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
     println!("Timer stopped");
 }
 
+fn cleanup_buffer(id: c_short) {
+    const MAX_LENGTH: usize = 262142;
+    let mut data1: Vec<c_int> = vec![0; MAX_LENGTH];
+    let mut data2: Vec<c_int> = vec![0; MAX_LENGTH];
+
+    let device_status = interface::status(false);
+
+    if device_status.status == 3 {
+        let mut length = min(device_status.ch1_datalen, device_status.ch2_datalen);
+        let l_ptr = &mut length as *mut u32;
+        interface::takeout_data(id, 0, data1.as_mut_ptr(), l_ptr);
+        interface::takeout_data(id, 1, data2.as_mut_ptr(), l_ptr);
+    }
+}
+
 /// データの取り込みが行われているフラグが立っている間
 /// CH1, CH2 からのデータを取得する
 ///
@@ -95,6 +110,8 @@ pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
 pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDataset>>>) {
     const MAX_LENGTH: usize = 262142;
     let mut length: c_uint;
+
+    cleanup_buffer(id);
 
     println!("Data acquisition started");
     loop {
@@ -122,10 +139,11 @@ pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDat
             continue;
         }
 
-        let position_denoised: Vec<c_int> = lowpass(&data1);
+        // let position_denoised: Vec<c_int> = lowpass(&data1);
 
         let mut dataset = dataset.lock().unwrap();
-        update_data(&position_denoised, &data2, &mut dataset, length);
+        // update_data(&position_denoised, &data2, &mut dataset, length);
+        update_data(&data1, &data2, &mut dataset, length);
     }
     println!("Data acquisition stopped");
 }
