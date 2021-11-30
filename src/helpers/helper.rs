@@ -1,5 +1,8 @@
 use crate::operations::interface;
 use crate::RawDataset;
+use signalo_filters::convolve::savitzky_golay::SavitzkyGolay;
+use signalo_filters::convolve::*;
+use signalo_filters::signalo_traits::Filter;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
@@ -12,12 +15,23 @@ use synthrs::filter::{convolve, cutoff_from_frequency, lowpass_filter};
 /// cutoff: 30 Hz
 /// sampling rate: 100 kHz
 /// band: 0.01
+#[allow(dead_code)]
 fn lowpass(sample: &Vec<c_int>) -> Vec<c_int> {
     let filter = lowpass_filter(cutoff_from_frequency(3000.0, 1000_000), 0.1);
     let sample: Vec<f64> = sample.into_iter().map(|x| *x as f64).collect();
 
     convolve(&filter, sample.as_slice())
         .into_iter()
+        .map(|x| x.round() as c_int)
+        .collect()
+}
+
+#[allow(dead_code)]
+fn savitzky_golay(sample: &Vec<c_int>) -> Vec<c_int> {
+    let filter: Convolve<f64, 5> = Convolve::savitzky_golay();
+    sample
+        .iter()
+        .scan(filter, |filter, &input| Some(filter.filter(input as f64)))
         .map(|x| x.round() as c_int)
         .collect()
 }
@@ -139,17 +153,11 @@ pub fn get_data(id: c_short, flag: Arc<Mutex<i8>>, dataset: Arc<Mutex<Vec<RawDat
             continue;
         }
 
-        for i in 0..length as usize{
-            data1[i] = data1[i] - 65535 / 2;
-        }
-        let position_denoised: Vec<c_int> = lowpass(&data1);
-        for i in 0..length as usize{
-            data1[i] = data1[i] + 65535 / 2;
-        }
+        // let position_denoised: Vec<c_int> = lowpass(&data1);
+        let position_denoised: Vec<c_int> = savitzky_golay(&data1);
 
         let mut dataset = dataset.lock().unwrap();
-        // update_data(&position_denoised, &data2, &mut dataset, length);
-        update_data(&data1, &data2, &mut dataset, length);
+        update_data(&position_denoised, &data2, &mut dataset, length);
     }
     println!("Data acquisition stopped");
 }

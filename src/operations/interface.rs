@@ -141,7 +141,6 @@ pub fn takeout_data(id: c_short, ch: c_uchar, data: *mut c_int, length: *mut c_u
     {
         unsafe {
             error = TUSB0216AD_Ad_Data(id, ch, data, length);
-            println!("Ad_Data: {}", error);
         }
     }
     #[cfg(not(feature = "release"))]
