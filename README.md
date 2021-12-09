@@ -25,11 +25,10 @@ cargo build --features release --release
 このライブラリが外部に向けて用意しているのは以下の関数。
 
 ```rust
-fn open(id: i32) -> i32;
-fn close(id: i32) -> i32;
-fn set_clock(id: i32, clock_time: i32, sel: u8) -> i32;
-fn input_set(id: i32, type1: u8, type2: u8);
-fn run(id: i32, seconds: u64);
+fn open(id: c_short);  // open the device
+fn close(id: c_short);  // close the device
+fn set_clock(id: c_short, clock_time: c_int, sel: c_uchar);
+fn run(id: c_short, seconds: u64);
 ```
 
-上の4つに関してはTurtle工業の製品のマニュアルを参照。`run`メソッドでは指定した時間(s)A/Dコンバータでデータを取り込んでデータを外部にpostする。
+上の4つに関してはTurtle工業の製品のマニュアルを参照。`run`メソッドでは指定した時間(seconds)だけA/Dコンバータでデータを取り込んでデータを外部にpostする。
