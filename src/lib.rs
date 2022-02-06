@@ -72,6 +72,7 @@ pub extern "C" fn test_run() {
     let mut length: c_uint;
 
     let mut store: Vec<c_int> = vec![];
+    let mut store2: Vec<c_int> = vec![];
 
     interface::open(0);
     interface::set_clock(0, 500, 0);
@@ -79,17 +80,22 @@ pub extern "C" fn test_run() {
     interface::start(0, 0, 0, 0, 0);
     interface::trigger(0);
 
-    for _ in 0..100 {
+    for _ in 0..20 {
         let mut data1 = [0 as c_int; MAX_LENGTH];
+        let mut data2 = [0 as c_int; MAX_LENGTH];
         let device_status = interface::status(true);
         length = device_status.ch1_datalen;
 
         if device_status.status == 3 {
             interface::takeout_data(0, 0, data1.as_mut_ptr(), &mut length as *mut u32);
+            interface::takeout_data(0, 1, data2.as_mut_ptr(), &mut length as *mut u32);
+        } else {
+            continue;
         }
 
         for i in 0..length as usize {
             store.push(data1[i]);
+            store2.push(data2[i]);
         }
         println!("length: {}", length);
     }
@@ -98,9 +104,11 @@ pub extern "C" fn test_run() {
     interface::close(0);
 
     let mut a: Vec<f32> = vec![];
+    let mut b: Vec<f32> = vec![];
     for i in 0..store.len() as usize {
-        let result = post::convert_to_voltage(0, 0, store[i] as f32, store[i] as f32);
+        let result = post::convert_to_voltage(0, 0, store[i] as f32, store2[i] as f32);
         a.push(result.0);
+        b.push(result.1);
     }
-    helper::write_to_csv("C:/Users/yudai/Desktop/a.csv", &a, &a);
+    helper::write_to_csv("C:/Users/yudai/Desktop/a.csv", &a, &b);
 }
