@@ -33,7 +33,7 @@ impl PartialOrd for RawDataset {
 }
 
 #[no_mangle]
-pub extern "C" fn run(id: c_short, seconds: u64) {
+pub extern "C" fn run(id: c_short, clk_time: c_int, seconds: u64) {
     // sequence が走っているかを示すフラグ
     // -1: not-started, 0: running, 1: finished
     let flag = Arc::new(Mutex::new(0));
@@ -44,7 +44,7 @@ pub extern "C" fn run(id: c_short, seconds: u64) {
 
     let flg1 = Arc::clone(&flag);
     let time_keeper = thread::spawn(move || {
-        helper::continuous_read(id, seconds, flg1);
+        helper::continuous_read(id, clk_time, seconds, flg1);
     });
 
     let flg2 = Arc::clone(&flag);
