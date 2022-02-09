@@ -244,7 +244,7 @@ mod test {
     fn test_continuous_read() {
         let seconds = 1;
         let start = Instant::now();
-        continuous_read(1, seconds, Arc::new(Mutex::new(0)));
+        continuous_read(1, 500, seconds, Arc::new(Mutex::new(0)));
         let end = start.elapsed();
 
         assert_nearly_eq!(end.as_millis() as f32, (seconds * 1000) as f32, 50.0);
