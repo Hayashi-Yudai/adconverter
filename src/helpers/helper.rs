@@ -78,13 +78,13 @@ fn update_data(
 /// * id - 装置のユニット番号選択スイッチの数字
 /// * seconds - データ取り込みを行う秒数
 /// * flag - データ取り込み中であるかを判別するフラグ
-pub fn continuous_read(id: c_short, seconds: u64, flag: Arc<Mutex<i8>>) {
+pub fn continuous_read(id: c_short, clk_time: c_int, seconds: u64, flag: Arc<Mutex<i8>>) {
     let sleeping_time = time::Duration::from_secs(seconds);
 
     // CH1, 2ともに+/-10Vの入力を受け付ける
     // 入力が+/-10VなのはSR830の仕様
     interface::input_set(id, 0, 0);
-    interface::set_clock(id, 500, 0);
+    interface::set_clock(id, clk_time, 0);
     interface::start(id, 2, 0, 0, 0);
     interface::trigger(id);
 
@@ -244,7 +244,7 @@ mod test {
     fn test_continuous_read() {
         let seconds = 1;
         let start = Instant::now();
-        continuous_read(1, seconds, Arc::new(Mutex::new(0)));
+        continuous_read(1, 500, seconds, Arc::new(Mutex::new(0)));
         let end = start.elapsed();
 
         assert_nearly_eq!(end.as_millis() as f32, (seconds * 1000) as f32, 50.0);
