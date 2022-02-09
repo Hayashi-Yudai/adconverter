@@ -11,7 +11,7 @@ Turtle工業製16bits A/Dコンバータを動かすためのプログラム。
 - [TUSB-0216ADMZドライバ (for Windows only)](https://www.turtle-ind.co.jp/download/win7_8_10/)
 
 ## Requirements
-- Rust 1.55.0
+- Rust 1.59.0
 - Windows 10
 
 ## How to use
@@ -32,3 +32,4 @@ fn run(id: c_short, seconds: u64);
 ```
 
 上の4つに関してはTurtle工業の製品のマニュアルを参照。`run`メソッドでは指定した時間(seconds)だけA/Dコンバータでデータを取り込んでデータを外部にpostする。
+`run` メソッドを使う際には内部で `open`, `close`, `set_clock`を実行しているのでユーザーが明示的に実行する必要はない。
